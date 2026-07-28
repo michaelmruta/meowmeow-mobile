@@ -21,11 +21,18 @@ enum LocalDirectorySnapshot {
             return [:]
         }
 
+        // The enumerator resolves symlinks in the paths it returns (e.g. iOS's
+        // /var -> /private/var), while `root` itself typically doesn't, so
+        // both sides are normalized the same way before stripping the prefix
+        // — otherwise the substring match fails, every file's key comes out
+        // mangled, and syncs treat everything as new on every run.
+        let normalizedRootPath = root.resolvingSymlinksInPath().path
+
         var map: [String: FileInfo] = [:]
         for case let url as URL in enumerator {
             let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .contentModificationDateKey, .fileSizeKey])
             guard values?.isRegularFile == true else { continue }
-            let relativePath = url.path.replacingOccurrences(of: root.path + "/", with: "")
+            let relativePath = url.resolvingSymlinksInPath().path.replacingOccurrences(of: normalizedRootPath + "/", with: "")
             map[relativePath] = FileInfo(
                 url: url,
                 modDate: values?.contentModificationDate ?? .distantPast,

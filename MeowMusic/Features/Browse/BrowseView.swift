@@ -35,6 +35,10 @@ struct BrowseView: View {
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
                 }
+            } else if library.artistsAlphabetical.isEmpty && library.isScanning {
+                ProgressView("Loading Library…")
+                    .tint(Theme.orange)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if library.artistsAlphabetical.isEmpty {
                 ContentUnavailableView(
                     "No Music Yet",

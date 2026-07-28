@@ -17,6 +17,15 @@ final class LibraryStore {
     private(set) var songs: [Song] = []
     private(set) var isScanning = false
 
+    /// Seeds `songs` from the on-disk cache immediately, before the first
+    /// `scan()` even runs, so a normal reopen renders the library the app
+    /// already had instead of a "Loading Library…" flash. `scan()` still
+    /// verifies against the filesystem afterward and corrects `songs` if
+    /// anything actually changed, but that happens silently in the background.
+    init() {
+        songs = Self.loadCache().values.map(\.song)
+    }
+
     static var documentsURL: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
@@ -70,6 +79,75 @@ final class LibraryStore {
         Self.ensureSeedFile()
     }
 
+    /// Caps how many files load metadata concurrently, so a large library
+    /// still benefits from overlap without opening an unbounded number of
+    /// `AVURLAsset` loads at once.
+    nonisolated private static let maxConcurrentLoads = 8
+
+    /// Metadata (title/artist/album/artwork/duration/bitrate) is the
+    /// expensive part of a scan — it means parsing every file's tags via
+    /// AVFoundation. Keyed by `Song.id` (path relative to Documents) and
+    /// invalidated per-file by size+mod-date, so a rescan (e.g. right after a
+    /// sync) only redoes that work for files that are actually new or
+    /// changed; everything else is served from the last scan's cache.
+    ///
+    /// Artwork is deliberately kept OUT of this JSON — embedding every song's
+    /// album art as base64 here made the single cache file scale with the
+    /// whole library's artwork size, which made loading the "cache" on a
+    /// large library slow (and prone to failing to save) in exactly the way
+    /// a scan is supposed to avoid. Artwork is written to its own small file
+    /// per song instead (see `artworkFileURL`) and reattached after decode.
+    private struct CacheEntry: Codable {
+        let song: Song
+        let fileSize: Int
+
+        private enum CodingKeys: String, CodingKey {
+            case song, fileSize
+        }
+
+        init(song: Song, fileSize: Int) {
+            self.song = song
+            self.fileSize = fileSize
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            song = try container.decode(Song.self, forKey: .song)
+            fileSize = try container.decode(Int.self, forKey: .fileSize)
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            var songWithoutArtwork = song
+            songWithoutArtwork.artwork = nil
+            try container.encode(songWithoutArtwork, forKey: .song)
+            try container.encode(fileSize, forKey: .fileSize)
+        }
+    }
+
+    nonisolated private static var cacheFileURL: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("LibraryScanCache.json")
+    }
+
+    nonisolated private static var artworkCacheDirectory: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("LibraryArtworkCache", isDirectory: true)
+    }
+
+    nonisolated private static func artworkFileURL(for relativePath: String) -> URL {
+        artworkCacheDirectory.appendingPathComponent(relativePath.replacingOccurrences(of: "/", with: "_"))
+    }
+
+    nonisolated private static func loadArtwork(for relativePath: String) -> Data? {
+        try? Data(contentsOf: artworkFileURL(for: relativePath))
+    }
+
+    nonisolated private static func saveArtwork(_ data: Data, for relativePath: String) {
+        try? FileManager.default.createDirectory(at: artworkCacheDirectory, withIntermediateDirectories: true)
+        try? data.write(to: artworkFileURL(for: relativePath), options: .atomic)
+    }
+
     func scan() async {
         ensureDirectories()
         isScanning = true
@@ -77,34 +155,112 @@ final class LibraryStore {
 
         let root = Self.downloadsURL
         let documentsRoot = Self.documentsURL
-        let fileURLs = Self.collectAudioFileURLs(in: root)
 
-        var results: [Song] = []
-        for fileURL in fileURLs {
-            if let song = await Self.loadSong(at: fileURL, documentsRoot: documentsRoot) {
-                results.append(song)
+        // The stat walk, cache comparison, artwork sidecar reads, and any
+        // AVFoundation metadata loads all happen off the main actor, so a
+        // scan — even one that finds real changes — never blocks the UI.
+        songs = await Task.detached(priority: .utility) {
+            let scannedFiles = Self.collectScannedFiles(in: root)
+            let cache = Self.loadCache()
+
+            var freshCache: [String: CacheEntry] = [:]
+            var results: [Song] = []
+            var needsLoad: [(url: URL, size: Int)] = []
+
+            for file in scannedFiles {
+                let relativePath = Self.relativePath(of: file.url, root: documentsRoot)
+                if let cached = cache[relativePath],
+                   cached.fileSize == file.size,
+                   cached.song.dateAdded == file.modDate {
+                    var song = cached.song
+                    song.fileURL = file.url
+                    song.artwork = Self.loadArtwork(for: relativePath)
+                    freshCache[relativePath] = CacheEntry(song: song, fileSize: file.size)
+                    results.append(song)
+                } else {
+                    needsLoad.append((file.url, file.size))
+                }
             }
-        }
-        songs = results
+
+            if !needsLoad.isEmpty {
+                await withTaskGroup(of: (String, Song?, Int).self) { group in
+                    var iterator = needsLoad.makeIterator()
+
+                    func addNext() {
+                        guard let file = iterator.next() else { return }
+                        group.addTask {
+                            let relativePath = Self.relativePath(of: file.url, root: documentsRoot)
+                            let song = await Self.loadSong(at: file.url, documentsRoot: documentsRoot)
+                            return (relativePath, song, file.size)
+                        }
+                    }
+
+                    for _ in 0..<min(Self.maxConcurrentLoads, needsLoad.count) { addNext() }
+
+                    while let (relativePath, song, size) = await group.next() {
+                        if let song {
+                            if let artwork = song.artwork {
+                                Self.saveArtwork(artwork, for: relativePath)
+                            }
+                            freshCache[relativePath] = CacheEntry(song: song, fileSize: size)
+                            results.append(song)
+                        }
+                        addNext()
+                    }
+                }
+            }
+
+            Self.saveCache(freshCache)
+            return results
+        }.value
     }
 
-    nonisolated private static func collectAudioFileURLs(in root: URL) -> [URL] {
+    nonisolated private static func relativePath(of url: URL, root: URL) -> String {
+        let normalizedRoot = root.resolvingSymlinksInPath().path
+        return url.resolvingSymlinksInPath().path.replacingOccurrences(of: normalizedRoot + "/", with: "")
+    }
+
+    nonisolated private static func loadCache() -> [String: CacheEntry] {
+        guard let data = try? Data(contentsOf: cacheFileURL),
+              let decoded = try? JSONDecoder().decode([String: CacheEntry].self, from: data) else {
+            return [:]
+        }
+        return decoded
+    }
+
+    nonisolated private static func saveCache(_ cache: [String: CacheEntry]) {
+        guard let data = try? JSONEncoder().encode(cache) else { return }
+        try? data.write(to: cacheFileURL, options: .atomic)
+    }
+
+    private struct ScannedFile {
+        let url: URL
+        let size: Int
+        let modDate: Date
+    }
+
+    nonisolated private static func collectScannedFiles(in root: URL) -> [ScannedFile] {
         let fm = FileManager.default
         guard let enumerator = fm.enumerator(
             at: root,
-            includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey],
+            includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey, .fileSizeKey],
             options: [.skipsHiddenFiles]
         ) else {
             return []
         }
 
         let audioExtensions: Set<String> = ["mp4", "m4a", "mp3", "wav", "aac", "flac"]
-        var fileURLs: [URL] = []
+        var files: [ScannedFile] = []
         for case let fileURL as URL in enumerator {
             guard audioExtensions.contains(fileURL.pathExtension.lowercased()) else { continue }
-            fileURLs.append(fileURL)
+            let values = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+            files.append(ScannedFile(
+                url: fileURL,
+                size: values?.fileSize ?? 0,
+                modDate: values?.contentModificationDate ?? .distantPast
+            ))
         }
-        return fileURLs
+        return files
     }
 
     private static func ensureSeedFile() {
@@ -121,7 +277,7 @@ final class LibraryStore {
     }
 
     private static func loadSong(at url: URL, documentsRoot: URL) async -> Song? {
-        let relativePath = url.path.replacingOccurrences(of: documentsRoot.path + "/", with: "")
+        let relativePath = Self.relativePath(of: url, root: documentsRoot)
         let artistFolder = url.deletingLastPathComponent().lastPathComponent
         let fallbackTitle = url.deletingPathExtension().lastPathComponent
         let resourceValues = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey, .totalFileSizeKey])

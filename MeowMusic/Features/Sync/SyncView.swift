@@ -8,7 +8,7 @@ private enum SyncSource: String, CaseIterable, Identifiable {
 }
 
 struct SyncView: View {
-    @State private var source: SyncSource = .local
+    @AppStorage("syncView.lastSource") private var source: SyncSource = .local
 
     var body: some View {
         VStack(spacing: 0) {
