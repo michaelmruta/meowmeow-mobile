@@ -31,6 +31,13 @@ struct BrowseView: View {
                                 tabRouter.select(.nowPlaying)
                             }
                             .listRowBackground(RowHighlightBackground(isActive: player.currentSong == song))
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    delete(song)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
@@ -62,5 +69,12 @@ struct BrowseView: View {
         .navigationDestination(for: String.self) { artist in
             ArtistAlbumsView(artist: artist)
         }
+    }
+
+    private func delete(_ song: Song) {
+        if player.currentSong == song {
+            player.pause()
+        }
+        library.delete(song)
     }
 }

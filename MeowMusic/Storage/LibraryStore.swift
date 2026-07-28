@@ -72,6 +72,19 @@ final class LibraryStore {
         songs.first { $0.id == id }
     }
 
+    /// Removes the underlying file from Downloads and drops the song from
+    /// the in-memory library plus its scan cache entry/artwork sidecar, so
+    /// it doesn't reappear until a resync brings it back.
+    func delete(_ song: Song) {
+        try? FileManager.default.removeItem(at: song.fileURL)
+        songs.removeAll { $0.id == song.id }
+
+        var cache = Self.loadCache()
+        cache.removeValue(forKey: song.id)
+        Self.saveCache(cache)
+        try? FileManager.default.removeItem(at: Self.artworkFileURL(for: song.id))
+    }
+
     func ensureDirectories() {
         let fm = FileManager.default
         try? fm.createDirectory(at: Self.downloadsURL, withIntermediateDirectories: true)
