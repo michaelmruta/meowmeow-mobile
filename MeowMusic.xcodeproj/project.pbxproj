@@ -10,22 +10,29 @@
 		0FF2FEB2151EDE286B170E4F /* FolderPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34A9610E974BCFEB71FDA38F /* FolderPicker.swift */; };
 		10B3FBCD27B612982ADED3EF /* LibraryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75EBD30E6DAD7B5959DBD0D7 /* LibraryStore.swift */; };
 		159164EC48618CE67A316D15 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7B6DF91E04380660FD2FD71 /* PlayerView.swift */; };
+		19500F06C322B8862AE1F73E /* LocalSyncController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68CCFFAC67CA39A32094B1D1 /* LocalSyncController.swift */; };
 		1AAA8D8376685C16F88A6A47 /* SyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEFCD1B9DF02A5739950C8AA /* SyncView.swift */; };
 		2496AFDD943366CB5885DB8B /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C2496A68D815FE880CDBEB2 /* RootTabView.swift */; };
 		36DDD482F1594BFBFC04AA0D /* MetadataEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAF7EC483A575E146F97B494 /* MetadataEditorView.swift */; };
 		3BB34DA7CB7E410F146C5331 /* ReflectedArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9898EC2BA4302912E580F0C8 /* ReflectedArtwork.swift */; };
 		3E5B9B7600F79F9333D55B62 /* SongRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA5E992E87D03D0B76058DD8 /* SongRow.swift */; };
 		430A1E287C2ACCB43BDA8DE6 /* PlayerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 149F3A3AEFCE771991E5E0EE /* PlayerService.swift */; };
+		46CA714DC316964AAF5FF174 /* WebDAVClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF8F1B1254C529F0C82AF40E /* WebDAVClient.swift */; };
 		4744563B2550D97D29B4E2EF /* RootContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01FD8D355A8890512643E9FD /* RootContainerView.swift */; };
 		4803E83D392E8E34A735682B /* AddSongsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFDA761AC52BD87F10DFFEA1 /* AddSongsSheet.swift */; };
 		4BD2110671E448588A0A4754 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FF8CCEFE3691F560547CA5C1 /* Assets.xcassets */; };
 		4C2C688A1F5A1F8578C3707F /* MetadataWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11F7DD3E4659F15B1EB9C9 /* MetadataWriter.swift */; };
+		547D2E3FA715153ACF9F6E06 /* WebDAVSyncController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F3FD047F31BF9B017893C0E /* WebDAVSyncController.swift */; };
 		5ACDB6848704F3010A660C2E /* Song.swift in Sources */ = {isa = PBXBuildFile; fileRef = B24628C5C240E28BDD3B27F1 /* Song.swift */; };
+		624C9A1DC53E29AC7E059679 /* WebDAVAccountStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A54C2912F6C262A3BC13D43F /* WebDAVAccountStore.swift */; };
 		70ABB505753601EDB0312670 /* EighthNotePairIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA6540084FED9C069AE3307 /* EighthNotePairIcon.swift */; };
+		761F5D92A324687F0A9235D0 /* IdleTimerGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ACB287391A1225F29608006 /* IdleTimerGuard.swift */; };
 		89EDB6460AA154549C5DA7D0 /* LyricsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54F709C41D3E64A28E11A0E8 /* LyricsView.swift */; };
 		8DABB2CC4602AC6BCCB0D60D /* SyncBookmarkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EA4D1251F7089C85851909C /* SyncBookmarkStore.swift */; };
+		9DCDA397854B6EB84834DF4E /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0230991AF0FC95082392C1BB /* KeychainStore.swift */; };
 		A2C4B343978249D5BFAFAD69 /* PlaylistsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 161CC2317935CCA8FC40551C /* PlaylistsView.swift */; };
 		B0F3A25170F90A3B15C7A5A2 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92096B932755B438B5DFBBC9 /* Theme.swift */; };
+		B13E9E93F8F503CB85D6B80E /* WebDAVSyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 361F3990D8994BBE4B5D7DAB /* WebDAVSyncEngine.swift */; };
 		B980262A07A5F0D2EB480DCA /* LyricsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB2844BC03D08CAFE969CDB7 /* LyricsService.swift */; };
 		BF6232AC000C261239905B59 /* MeowMusicApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50C039848B39090B1AE0808B /* MeowMusicApp.swift */; };
 		D3265D50E05756DAC47C2FEE /* FavoritesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50B294B437A3B915549C5371 /* FavoritesView.swift */; };
@@ -35,18 +42,25 @@
 		E1EA6B12ECAEBE9D9314A19F /* PlaylistFileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CC2416DC82F4513076426E7 /* PlaylistFileManager.swift */; };
 		E7257DB7F08E22F2ED9F6A1F /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4B4C86DEF5F60EE08BF7447 /* Models.swift */; };
 		E87E45F9D99CABAB1E418AC0 /* ArtistAlbumsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41FA64E02237B627F3A5FEDD /* ArtistAlbumsView.swift */; };
+		FA623B3DB2CA40FE89C75AA1 /* LocalDirectorySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44B4336725C4D259EFB9FE06 /* LocalDirectorySnapshot.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		01FD8D355A8890512643E9FD /* RootContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootContainerView.swift; sourceTree = "<group>"; };
+		0230991AF0FC95082392C1BB /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		0ACB287391A1225F29608006 /* IdleTimerGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdleTimerGuard.swift; sourceTree = "<group>"; };
 		149F3A3AEFCE771991E5E0EE /* PlayerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerService.swift; sourceTree = "<group>"; };
 		161CC2317935CCA8FC40551C /* PlaylistsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistsView.swift; sourceTree = "<group>"; };
 		2FA6540084FED9C069AE3307 /* EighthNotePairIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EighthNotePairIcon.swift; sourceTree = "<group>"; };
 		34A9610E974BCFEB71FDA38F /* FolderPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderPicker.swift; sourceTree = "<group>"; };
+		361F3990D8994BBE4B5D7DAB /* WebDAVSyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebDAVSyncEngine.swift; sourceTree = "<group>"; };
+		3F3FD047F31BF9B017893C0E /* WebDAVSyncController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebDAVSyncController.swift; sourceTree = "<group>"; };
 		41FA64E02237B627F3A5FEDD /* ArtistAlbumsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtistAlbumsView.swift; sourceTree = "<group>"; };
+		44B4336725C4D259EFB9FE06 /* LocalDirectorySnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalDirectorySnapshot.swift; sourceTree = "<group>"; };
 		50B294B437A3B915549C5371 /* FavoritesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesView.swift; sourceTree = "<group>"; };
 		50C039848B39090B1AE0808B /* MeowMusicApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeowMusicApp.swift; sourceTree = "<group>"; };
 		54F709C41D3E64A28E11A0E8 /* LyricsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyricsView.swift; sourceTree = "<group>"; };
+		68CCFFAC67CA39A32094B1D1 /* LocalSyncController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalSyncController.swift; sourceTree = "<group>"; };
 		75EBD30E6DAD7B5959DBD0D7 /* LibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStore.swift; sourceTree = "<group>"; };
 		7B93DFCC0200932AFE728A6F /* MeowMusic.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MeowMusic.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7C2496A68D815FE880CDBEB2 /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
@@ -56,9 +70,9 @@
 		9898EC2BA4302912E580F0C8 /* ReflectedArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReflectedArtwork.swift; sourceTree = "<group>"; };
 		9EA4D1251F7089C85851909C /* SyncBookmarkStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncBookmarkStore.swift; sourceTree = "<group>"; };
 		A402B705BEF00E651B918639 /* PlaylistDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistDetailView.swift; sourceTree = "<group>"; };
+		A54C2912F6C262A3BC13D43F /* WebDAVAccountStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebDAVAccountStore.swift; sourceTree = "<group>"; };
 		AA11F7DD3E4659F15B1EB9C9 /* MetadataWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataWriter.swift; sourceTree = "<group>"; };
 		AAF7EC483A575E146F97B494 /* MetadataEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataEditorView.swift; sourceTree = "<group>"; };
-		AEED04FF3014985200805E9F /* MeowMusic.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MeowMusic.entitlements; sourceTree = "<group>"; };
 		B24628C5C240E28BDD3B27F1 /* Song.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Song.swift; sourceTree = "<group>"; };
 		BB2844BC03D08CAFE969CDB7 /* LyricsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyricsService.swift; sourceTree = "<group>"; };
 		C7B6DF91E04380660FD2FD71 /* PlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
@@ -66,6 +80,7 @@
 		CEFCD1B9DF02A5739950C8AA /* SyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncView.swift; sourceTree = "<group>"; };
 		CFDA761AC52BD87F10DFFEA1 /* AddSongsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddSongsSheet.swift; sourceTree = "<group>"; };
 		D41D62C5938F1F65D949B4E3 /* BrowseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseView.swift; sourceTree = "<group>"; };
+		DF8F1B1254C529F0C82AF40E /* WebDAVClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebDAVClient.swift; sourceTree = "<group>"; };
 		E4B4C86DEF5F60EE08BF7447 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		FF8CCEFE3691F560547CA5C1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -130,12 +145,20 @@
 		654F1ED8755826C692CF8DB9 /* Storage */ = {
 			isa = PBXGroup;
 			children = (
+				0ACB287391A1225F29608006 /* IdleTimerGuard.swift */,
+				0230991AF0FC95082392C1BB /* KeychainStore.swift */,
 				75EBD30E6DAD7B5959DBD0D7 /* LibraryStore.swift */,
+				44B4336725C4D259EFB9FE06 /* LocalDirectorySnapshot.swift */,
+				68CCFFAC67CA39A32094B1D1 /* LocalSyncController.swift */,
 				E4B4C86DEF5F60EE08BF7447 /* Models.swift */,
 				8CC2416DC82F4513076426E7 /* PlaylistFileManager.swift */,
 				B24628C5C240E28BDD3B27F1 /* Song.swift */,
 				9EA4D1251F7089C85851909C /* SyncBookmarkStore.swift */,
 				8E33A1C73DEF2305C7E13BD4 /* SyncEngine.swift */,
+				A54C2912F6C262A3BC13D43F /* WebDAVAccountStore.swift */,
+				DF8F1B1254C529F0C82AF40E /* WebDAVClient.swift */,
+				3F3FD047F31BF9B017893C0E /* WebDAVSyncController.swift */,
+				361F3990D8994BBE4B5D7DAB /* WebDAVSyncEngine.swift */,
 			);
 			path = Storage;
 			sourceTree = "<group>";
@@ -178,7 +201,6 @@
 			children = (
 				748EB9C822AE9AC9FD8C19D6 /* MeowMusic */,
 				320EFDFB454C80EAEB09FCE2 /* Products */,
-				AEED04FF3014985200805E9F /* MeowMusic.entitlements */,
 			);
 			sourceTree = "<group>";
 		};
@@ -296,7 +318,11 @@
 				70ABB505753601EDB0312670 /* EighthNotePairIcon.swift in Sources */,
 				D3265D50E05756DAC47C2FEE /* FavoritesView.swift in Sources */,
 				0FF2FEB2151EDE286B170E4F /* FolderPicker.swift in Sources */,
+				761F5D92A324687F0A9235D0 /* IdleTimerGuard.swift in Sources */,
+				9DCDA397854B6EB84834DF4E /* KeychainStore.swift in Sources */,
 				10B3FBCD27B612982ADED3EF /* LibraryStore.swift in Sources */,
+				FA623B3DB2CA40FE89C75AA1 /* LocalDirectorySnapshot.swift in Sources */,
+				19500F06C322B8862AE1F73E /* LocalSyncController.swift in Sources */,
 				B980262A07A5F0D2EB480DCA /* LyricsService.swift in Sources */,
 				89EDB6460AA154549C5DA7D0 /* LyricsView.swift in Sources */,
 				BF6232AC000C261239905B59 /* MeowMusicApp.swift in Sources */,
@@ -317,6 +343,10 @@
 				DF6E34BFD8E046E7974C4BB1 /* SyncEngine.swift in Sources */,
 				1AAA8D8376685C16F88A6A47 /* SyncView.swift in Sources */,
 				B0F3A25170F90A3B15C7A5A2 /* Theme.swift in Sources */,
+				624C9A1DC53E29AC7E059679 /* WebDAVAccountStore.swift in Sources */,
+				46CA714DC316964AAF5FF174 /* WebDAVClient.swift in Sources */,
+				547D2E3FA715153ACF9F6E06 /* WebDAVSyncController.swift in Sources */,
+				B13E9E93F8F503CB85D6B80E /* WebDAVSyncEngine.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

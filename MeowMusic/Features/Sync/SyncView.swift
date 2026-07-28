@@ -1,13 +1,43 @@
 import SwiftUI
 
+private enum SyncSource: String, CaseIterable, Identifiable {
+    case local = "Local Storage"
+    case webdav = "WebDAV"
+
+    var id: String { rawValue }
+}
+
 struct SyncView: View {
+    @State private var source: SyncSource = .local
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Picker("Sync Source", selection: $source) {
+                ForEach(SyncSource.allCases) { source in
+                    Text(source.rawValue).tag(source)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding()
+            .background(Theme.background)
+
+            switch source {
+            case .local:
+                LocalStorageSyncView()
+            case .webdav:
+                WebDAVSyncView()
+            }
+        }
+        .background(Theme.background)
+        .navigationTitle("Sync")
+    }
+}
+
+private struct LocalStorageSyncView: View {
     @Environment(SyncBookmarkStore.self) private var syncStore
     @Environment(LibraryStore.self) private var library
+    @Environment(LocalSyncController.self) private var syncController
     @State private var isPresentingPicker = false
-    @State private var isSyncing = false
-    @State private var syncProgress: Double = 0
-    @State private var lastResultText: String?
-    @State private var syncError: String?
 
     var body: some View {
         Form {
@@ -53,7 +83,7 @@ struct SyncView: View {
                 } label: {
                     HStack {
                         Spacer()
-                        if isSyncing {
+                        if syncController.isSyncing {
                             ProgressView()
                                 .tint(Theme.orange)
                         } else {
@@ -66,19 +96,26 @@ struct SyncView: View {
                 .foregroundStyle(canSync ? Theme.orange : Theme.tertiaryText)
                 .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
 
-                if isSyncing {
+                if syncController.isSyncing {
                     VStack(alignment: .leading, spacing: 6) {
-                        ProgressView(value: syncProgress)
+                        ProgressView(value: syncController.progress)
                             .tint(Theme.orange)
-                        Text("\(Int(syncProgress * 100))%")
+                        Text("\(Int(syncController.progress * 100))%")
                             .font(.caption)
                             .foregroundStyle(Theme.secondaryText)
+                        if let currentFileName = syncController.currentFileName {
+                            Text(currentFileName)
+                                .font(.caption2)
+                                .foregroundStyle(Theme.tertiaryText)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
                     }
-                } else if let lastResultText {
+                } else if let lastResultText = syncController.lastResultText {
                     Text(lastResultText)
                         .font(.caption)
                         .foregroundStyle(Theme.secondaryText)
-                } else if let syncError {
+                } else if let syncError = syncController.syncError {
                     Text(syncError)
                         .font(.caption)
                         .foregroundStyle(.red)
@@ -92,7 +129,6 @@ struct SyncView: View {
         }
         .scrollContentBackground(.hidden)
         .background(Theme.background)
-        .navigationTitle("Sync")
         .sheet(isPresented: $isPresentingPicker) {
             FolderPicker { url in
                 syncStore.setFolder(url)
@@ -102,28 +138,143 @@ struct SyncView: View {
     }
 
     private var canSync: Bool {
-        syncStore.folderDisplayName != nil && !isSyncing
+        syncStore.folderDisplayName != nil && !syncController.isSyncing
     }
 
     private func performSync() {
         guard let folderURL = syncStore.folderURL else { return }
-        isSyncing = true
-        syncProgress = 0
-        syncError = nil
-        lastResultText = nil
+        syncController.startSync(folderURL: folderURL, library: library, syncStore: syncStore)
+    }
+}
 
-        Task {
-            defer { isSyncing = false }
-            do {
-                let stats = try await SyncEngine.sync(externalRoot: folderURL) { progress in
-                    syncProgress = progress
+private struct WebDAVSyncView: View {
+    @Environment(WebDAVAccountStore.self) private var account
+    @Environment(LibraryStore.self) private var library
+    @Environment(WebDAVSyncController.self) private var syncController
+
+    var body: some View {
+        @Bindable var account = account
+
+        Form {
+            Section {
+                LabeledContent("Server URL") {
+                    TextField("https://example.com/dav", text: $account.serverURLString)
+                        .multilineTextAlignment(.trailing)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                 }
-                lastResultText = stats.summaryText
-                await library.scan()
-                syncStore.refreshReachability()
-            } catch {
-                syncError = error.localizedDescription
+                LabeledContent("Folder") {
+                    TextField("Music (optional)", text: $account.remotePath)
+                        .multilineTextAlignment(.trailing)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+                LabeledContent("Username") {
+                    TextField("username", text: $account.username)
+                        .multilineTextAlignment(.trailing)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+                LabeledContent("Password") {
+                    SecureField("password", text: $account.password)
+                        .multilineTextAlignment(.trailing)
+                }
+            } header: {
+                Text("WebDAV Server")
+            } footer: {
+                Text("Works with Nextcloud, ownCloud, Synology, and most other WebDAV servers. Credentials are stored in the Keychain.")
             }
+            .listRowBackground(Theme.card)
+
+            Section("Connection") {
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(account.isConnected ? Color.green : Color.gray)
+                        .frame(width: 10, height: 10)
+                    Text(connectionStatusText)
+                        .foregroundStyle(Theme.primaryText)
+                        .lineLimit(1)
+                    Spacer()
+                    Button {
+                        Task { await account.testConnection() }
+                    } label: {
+                        if account.isTestingConnection {
+                            ProgressView().tint(Theme.orange)
+                        } else {
+                            Text("Test")
+                        }
+                    }
+                    .disabled(account.isTestingConnection || !account.isConfigured)
+                    .foregroundStyle(account.isConfigured && !account.isTestingConnection ? Theme.orange : Theme.tertiaryText)
+                }
+                if let connectionError = account.connectionError {
+                    Text(connectionError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+            .listRowBackground(Theme.card)
+
+            Section {
+                Button {
+                    performSync()
+                } label: {
+                    HStack {
+                        Spacer()
+                        if syncController.isSyncing {
+                            ProgressView()
+                                .tint(Theme.orange)
+                        } else {
+                            Text("Sync Now").fontWeight(.semibold)
+                        }
+                        Spacer()
+                    }
+                }
+                .disabled(!canSync)
+                .foregroundStyle(canSync ? Theme.orange : Theme.tertiaryText)
+                .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+
+                if syncController.isSyncing {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ProgressView(value: syncController.progress)
+                            .tint(Theme.orange)
+                        Text(syncController.totalUnits > 0 ? "\(syncController.completedUnits)/\(syncController.totalUnits) files" : "Preparing…")
+                            .font(.caption)
+                            .foregroundStyle(Theme.secondaryText)
+                    }
+                } else if let lastResultText = syncController.lastResultText {
+                    Text(lastResultText)
+                        .font(.caption)
+                        .foregroundStyle(Theme.secondaryText)
+                } else if let syncError = syncController.syncError {
+                    Text(syncError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            } header: {
+                Text("Server → App Library")
+            } footer: {
+                Text("Downloads new and changed songs from the server, and removes songs here that no longer exist there. Syncing changes from the app back out to the server isn't implemented yet.")
+            }
+            .listRowBackground(Theme.card)
         }
+        .scrollContentBackground(.hidden)
+        .background(Theme.background)
+    }
+
+    private var connectionStatusText: String {
+        if account.isTestingConnection { return "Testing…" }
+        if !account.isConfigured { return "Not Configured" }
+        return account.isConnected ? "Connected" : "Not Connected"
+    }
+
+    private var canSync: Bool {
+        account.isConfigured && !syncController.isSyncing
+    }
+
+    private func performSync() {
+        guard let root = account.rootURL else { return }
+        syncController.startSync(root: root, credentials: account.credentials, library: library)
     }
 }

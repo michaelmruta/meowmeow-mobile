@@ -6,13 +6,22 @@ struct MeowMusicApp: App {
     @State private var library = LibraryStore()
     @State private var player = PlayerService()
     @State private var syncStore = SyncBookmarkStore()
+    @State private var webDAVStore = WebDAVAccountStore()
+    @State private var localSyncController = LocalSyncController()
+    @State private var webDAVSyncController = WebDAVSyncController()
     @State private var tabRouter = TabRouter()
     @Environment(\.scenePhase) private var scenePhase
 
     var modelContainer: ModelContainer = {
         let schema = Schema([FavoriteRecord.self, PlaylistEntity.self, PlaylistSongEntity.self])
-        let config = ModelConfiguration(schema: schema)
-        return try! ModelContainer(for: schema, configurations: [config])
+        let config = ModelConfiguration(schema: schema, cloudKitDatabase: .none)
+
+        do {
+            return try ModelContainer(for: schema, configurations: [config])
+        } catch {
+            let fallbackConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+            return try! ModelContainer(for: schema, configurations: [fallbackConfig])
+        }
     }()
 
     var body: some Scene {
@@ -21,6 +30,9 @@ struct MeowMusicApp: App {
                 .environment(library)
                 .environment(player)
                 .environment(syncStore)
+                .environment(webDAVStore)
+                .environment(localSyncController)
+                .environment(webDAVSyncController)
                 .environment(tabRouter)
                 .preferredColorScheme(.dark)
                 .task {

@@ -46,21 +46,21 @@ enum SyncEngine {
     static func sync(
         direction: SyncDirection = .externalToInternal,
         externalRoot: URL,
-        onProgress: @escaping @MainActor (Double) -> Void = { _ in }
+        onProgress: @escaping @MainActor (Double, String?) -> Void = { _, _ in }
     ) async throws -> SyncStats {
         guard externalRoot.startAccessingSecurityScopedResource() else {
             throw SyncError.folderNotAccessible
         }
         defer { externalRoot.stopAccessingSecurityScopedResource() }
 
-        await onProgress(0)
+        await onProgress(0, nil)
 
         let internalRoot = await MainActor.run { LibraryStore.downloadsURL }
         let fm = FileManager.default
         try fm.createDirectory(at: internalRoot, withIntermediateDirectories: true)
 
-        let sourceFiles = fileMap(root: externalRoot)
-        let destinationFiles = fileMap(root: internalRoot)
+        let sourceFiles = LocalDirectorySnapshot.fileMap(root: externalRoot)
+        let destinationFiles = LocalDirectorySnapshot.fileMap(root: internalRoot)
 
         let changedEntries = sourceFiles.filter { relativePath, sourceInfo in
             guard let existing = destinationFiles[relativePath] else { return true }
@@ -83,62 +83,19 @@ enum SyncEngine {
             if isNew { stats.added += 1 } else { stats.updated += 1 }
 
             completedUnits += 1
-            await onProgress(Double(completedUnits) / Double(totalUnits))
+            await onProgress(Double(completedUnits) / Double(totalUnits), relativePath)
         }
 
-        for (_, existing) in deletedEntries {
+        for (relativePath, existing) in deletedEntries {
             try? fm.removeItem(at: existing.url)
             stats.deleted += 1
 
             completedUnits += 1
-            await onProgress(Double(completedUnits) / Double(totalUnits))
+            await onProgress(Double(completedUnits) / Double(totalUnits), relativePath)
         }
 
-        removeEmptySubdirectories(of: internalRoot)
-        await onProgress(1)
+        LocalDirectorySnapshot.removeEmptySubdirectories(of: internalRoot)
+        await onProgress(1, nil)
         return stats
-    }
-
-    private struct FileInfo {
-        let url: URL
-        let modDate: Date
-        let size: Int
-    }
-
-    nonisolated private static func fileMap(root: URL) -> [String: FileInfo] {
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: root,
-            includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey, .fileSizeKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return [:]
-        }
-
-        var map: [String: FileInfo] = [:]
-        for case let url as URL in enumerator {
-            let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .contentModificationDateKey, .fileSizeKey])
-            guard values?.isRegularFile == true else { continue }
-            let relativePath = url.path.replacingOccurrences(of: root.path + "/", with: "")
-            map[relativePath] = FileInfo(
-                url: url,
-                modDate: values?.contentModificationDate ?? .distantPast,
-                size: values?.fileSize ?? 0
-            )
-        }
-        return map
-    }
-
-    nonisolated private static func removeEmptySubdirectories(of root: URL) {
-        let fm = FileManager.default
-        guard let entries = try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) else { return }
-        for entry in entries {
-            var isDirectory: ObjCBool = false
-            guard fm.fileExists(atPath: entry.path, isDirectory: &isDirectory), isDirectory.boolValue else { continue }
-            let contents = (try? fm.contentsOfDirectory(atPath: entry.path)) ?? []
-            if contents.isEmpty {
-                try? fm.removeItem(at: entry)
-            }
-        }
     }
 }

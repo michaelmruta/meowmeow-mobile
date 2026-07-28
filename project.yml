@@ -45,7 +45,6 @@ targets:
         ITSAppUsesNonExemptEncryption: false
     settings:
       base:
-        CODE_SIGN_ENTITLEMENTS: MeowMusic.entitlements
         PRODUCT_BUNDLE_IDENTIFIER: com.michaelruta.MeowMusic
         PRODUCT_NAME: MeowMusic
     schemes:
