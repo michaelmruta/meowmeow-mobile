@@ -7,7 +7,13 @@ enum RootTab: Hashable {
 @MainActor
 @Observable
 final class TabRouter {
-    var selection: RootTab = .nowPlaying
+    var selection: RootTab = .nowPlaying {
+        didSet {
+            guard oldValue != selection else { return }
+            previousSelection = oldValue
+        }
+    }
+    private(set) var previousSelection: RootTab?
     private var pendingSelection: RootTab?
     private var isSelectionUpdateScheduled = false
 

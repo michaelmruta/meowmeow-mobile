@@ -35,10 +35,13 @@ struct PlaylistsView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(playlist.name)
                                         .foregroundStyle(Theme.primaryText)
+                                        .lineLimit(1)
                                     Text("\(playlist.songs.count) song\(playlist.songs.count == 1 ? "" : "s")")
                                         .font(.caption)
                                         .foregroundStyle(Theme.secondaryText)
+                                        .lineLimit(1)
                                 }
+                                Spacer()
                             }
                         }
                         .listRowBackground(Color.clear)

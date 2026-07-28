@@ -64,6 +64,7 @@ struct SyncView: View {
                 }
                 .disabled(!canSync)
                 .foregroundStyle(canSync ? Theme.orange : Theme.tertiaryText)
+                .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
 
                 if isSyncing {
                     VStack(alignment: .leading, spacing: 6) {

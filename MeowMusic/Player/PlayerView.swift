@@ -4,6 +4,7 @@ import SwiftData
 struct PlayerView: View {
     @Environment(PlayerService.self) private var player
     @Environment(LibraryStore.self) private var library
+    @Environment(TabRouter.self) private var tabRouter
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \FavoriteRecord.dateFavorited, order: .reverse) private var favorites: [FavoriteRecord]
 
@@ -76,6 +77,15 @@ struct PlayerView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.background)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 30, coordinateSpace: .local)
+                .onEnded { value in
+                    guard value.translation.width < -60,
+                          abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
+                    goToPreviousTab()
+                }
+        )
         .navigationTitle("Now Playing")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -239,6 +249,11 @@ struct PlayerView: View {
         } else {
             modelContext.insert(FavoriteRecord(songPath: song.id))
         }
+    }
+
+    private func goToPreviousTab() {
+        guard let previous = tabRouter.previousSelection, previous != .nowPlaying else { return }
+        tabRouter.select(previous)
     }
 
     private func formatted(_ time: TimeInterval) -> String {

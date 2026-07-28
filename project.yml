@@ -33,6 +33,8 @@ targets:
         CFBundleDisplayName: Meow Music
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
         UIBackgroundModes:
           - audio
         UISupportedInterfaceOrientations:
@@ -43,6 +45,7 @@ targets:
         ITSAppUsesNonExemptEncryption: false
     settings:
       base:
+        CODE_SIGN_ENTITLEMENTS: MeowMusic.entitlements
         PRODUCT_BUNDLE_IDENTIFIER: com.michaelruta.MeowMusic
         PRODUCT_NAME: MeowMusic
     schemes:

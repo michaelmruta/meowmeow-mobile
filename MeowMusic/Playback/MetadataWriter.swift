@@ -50,6 +50,9 @@ enum MetadataWriter {
         if update.album != nil { replacedKeys.insert(.commonKeyAlbumName) }
         if update.artwork != nil { replacedKeys.insert(.commonKeyArtwork) }
 
+        let artworkToPreserve = update.artwork == nil && !existingMetadata.contains(where: isArtworkItem)
+            ? song.artwork
+            : nil
         var items = existingMetadata.filter { item in
             guard item.keySpace == .common,
                   let key = item.key as? String,
@@ -61,7 +64,9 @@ enum MetadataWriter {
         if let title = update.title { items.append(metadataItem(.commonKeyTitle, value: title as NSString)) }
         if let artist = update.artist { items.append(metadataItem(.commonKeyArtist, value: artist as NSString)) }
         if let album = update.album { items.append(metadataItem(.commonKeyAlbumName, value: album as NSString)) }
-        if let artwork = update.artwork { items.append(metadataItem(.commonKeyArtwork, value: artwork as NSData)) }
+        if let artwork = update.artwork ?? artworkToPreserve {
+            items.append(metadataItem(.commonKeyArtwork, value: artwork as NSData))
+        }
         exportSession.metadata = items
 
         let ext = song.fileURL.pathExtension.lowercased()
@@ -106,5 +111,9 @@ enum MetadataWriter {
         item.key = key.rawValue as NSString
         item.value = value
         return item
+    }
+
+    private static func isArtworkItem(_ item: AVMetadataItem) -> Bool {
+        item.commonKey == .commonKeyArtwork
     }
 }

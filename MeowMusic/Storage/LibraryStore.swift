@@ -3,24 +3,22 @@ import AVFoundation
 import Observation
 
 /// Scans Documents/Downloads/<Artist>/<file> and keeps an in-memory library.
-/// The filesystem (managed by the user via Finder) is the source of truth for
-/// which songs exist; SwiftData only stores favorites/playlists on top of it.
+/// The filesystem (managed by the user via Finder, or mirrored in by Sync) is
+/// the source of truth for which songs exist; SwiftData only stores
+/// favorites/playlists on top of it. Storage is always the app's local,
+/// on-device Documents directory — deliberately not iCloud, since that
+/// container's availability is resolved asynchronously and can differ
+/// between launches, which made the library appear to go empty at random.
 @MainActor
 @Observable
 final class LibraryStore {
-    private static let iCloudContainerIdentifier = "iCloud.com.michaelruta.MeowMusic"
-    private static let iCloudSeedFileName = "Add Music Here.txt"
-    private static var iCloudDocumentsURL: URL?
+    private static let seedFileName = "Add Music Here.txt"
 
     private(set) var songs: [Song] = []
     private(set) var isScanning = false
 
-    private static var localDocumentsURL: URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-    }
-
     static var documentsURL: URL {
-        iCloudDocumentsURL ?? localDocumentsURL
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
 
     static var downloadsURL: URL {
@@ -69,20 +67,7 @@ final class LibraryStore {
         let fm = FileManager.default
         try? fm.createDirectory(at: Self.downloadsURL, withIntermediateDirectories: true)
         try? fm.createDirectory(at: Self.playlistsURL, withIntermediateDirectories: true)
-        Self.ensureICloudSeedFile()
-    }
-
-    func prepareStorage() async {
-        let containerIdentifier = Self.iCloudContainerIdentifier
-        let containerURL = await Task.detached(priority: .utility) {
-            FileManager.default.url(forUbiquityContainerIdentifier: containerIdentifier)
-        }.value
-
-        if let documentsURL = containerURL?.appendingPathComponent("Documents", isDirectory: true) {
-            Self.iCloudDocumentsURL = documentsURL
-        }
-
-        ensureDirectories()
+        Self.ensureSeedFile()
     }
 
     func scan() async {
@@ -122,10 +107,8 @@ final class LibraryStore {
         return fileURLs
     }
 
-    private static func ensureICloudSeedFile() {
-        guard iCloudDocumentsURL != nil else { return }
-
-        let fileURL = documentsURL.appendingPathComponent(iCloudSeedFileName)
+    private static func ensureSeedFile() {
+        let fileURL = documentsURL.appendingPathComponent(seedFileName)
         guard !FileManager.default.fileExists(atPath: fileURL.path) else { return }
 
         let text = """

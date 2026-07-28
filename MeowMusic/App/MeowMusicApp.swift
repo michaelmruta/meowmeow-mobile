@@ -24,13 +24,11 @@ struct MeowMusicApp: App {
                 .environment(tabRouter)
                 .preferredColorScheme(.dark)
                 .task {
-                    await library.prepareStorage()
                     await library.scan()
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     if newPhase == .active {
                         Task {
-                            await library.prepareStorage()
                             await library.scan()
                         }
                         syncStore.refreshReachability()

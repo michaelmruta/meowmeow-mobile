@@ -29,16 +29,32 @@ struct ReflectedArtwork: View {
                     )
             }
         } else {
-            Image("EmptyArtworkPlaceholder")
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .shadow(color: .black.opacity(0.4), radius: 20, y: 10)
+            VStack(spacing: 2) {
+                placeholderImage
+                    .frame(width: size, height: size)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .shadow(color: .black.opacity(0.55), radius: 24, y: 14)
+
+                placeholderImage
+                    .frame(width: size, height: size)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .scaleEffect(x: 1, y: -1)
+                    .frame(height: size * 0.32, alignment: .top)
+                    .clipped()
+                    .mask(
+                        LinearGradient(colors: [.white.opacity(0.45), .clear], startPoint: .top, endPoint: .bottom)
+                    )
+            }
         }
     }
 
     private var image: UIImage? {
         artwork.flatMap(UIImage.init(data:))
+    }
+
+    private var placeholderImage: some View {
+        Image("EmptyArtworkPlaceholder")
+            .resizable()
+            .aspectRatio(contentMode: .fill)
     }
 }
