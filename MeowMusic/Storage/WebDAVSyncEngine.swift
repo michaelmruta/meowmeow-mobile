@@ -4,8 +4,9 @@ struct WebDAVSyncStats {
     var added = 0
     var updated = 0
     var deleted = 0
+    var playlistsUpdated = 0
 
-    var isEmpty: Bool { added == 0 && updated == 0 && deleted == 0 }
+    var isEmpty: Bool { added == 0 && updated == 0 && deleted == 0 && playlistsUpdated == 0 }
 
     var summaryText: String {
         guard !isEmpty else { return "Already up to date" }
@@ -13,6 +14,7 @@ struct WebDAVSyncStats {
         if added > 0 { parts.append("\(added) added") }
         if updated > 0 { parts.append("\(updated) updated") }
         if deleted > 0 { parts.append("\(deleted) removed") }
+        if playlistsUpdated > 0 { parts.append("\(playlistsUpdated) playlist\(playlistsUpdated == 1 ? "" : "s") synced") }
         return parts.joined(separator: ", ")
     }
 }
@@ -26,6 +28,14 @@ struct WebDAVSyncStats {
 /// rather than transfer itself.
 enum WebDAVSyncEngine {
     private static let audioExtensions: Set<String> = ["mp4", "m4a", "mp3", "wav", "aac", "flac"]
+
+    /// Playlists live in a folder named `_playlist` alongside the artist
+    /// folders at the root of the WebDAV share. Unlike audio files, playlists
+    /// are merged rather than mirrored: a remote playlist overwrites a local
+    /// one with the same file name, but a local playlist absent from the
+    /// remote `_playlist` folder is left alone rather than deleted.
+    private static let playlistFolderName = "_playlist"
+    private static let playlistExtensions: Set<String> = ["m3u", "m3u8"]
 
     /// `onProgress` reports (files completed so far, total files to sync) —
     /// e.g. (1, 1000) — rather than a single "current file", since multiple
@@ -49,7 +59,14 @@ enum WebDAVSyncEngine {
             sourceFiles[relativePath(of: entry.url, root: root)] = entry
         }
 
-        let destinationFiles = LocalDirectorySnapshot.fileMap(root: internalRoot)
+        // Playlists live in a `_playlist` subfolder inside Downloads (see
+        // `LibraryStore.playlistsURL`), so they must be excluded here —
+        // otherwise the audio mirror below would see them as files that no
+        // longer exist on the remote (they're never in `sourceFiles`, which
+        // is audio-extensions only) and delete them every sync.
+        let destinationFiles = LocalDirectorySnapshot.fileMap(root: internalRoot).filter { relativePath, _ in
+            !relativePath.hasPrefix("\(playlistFolderName)/")
+        }
 
         let changedEntries = sourceFiles.filter { relativePath, sourceEntry in
             guard let existing = destinationFiles[relativePath] else { return true }
@@ -59,7 +76,27 @@ enum WebDAVSyncEngine {
             sourceFiles[relativePath] == nil
         }
 
-        let totalUnits = changedEntries.count + deletedEntries.count
+        var sourcePlaylists: [String: WebDAVEntry] = [:]
+        for entry in remoteEntries
+        where !entry.url.lastPathComponent.hasPrefix(".")
+            && playlistExtensions.contains(entry.url.pathExtension.lowercased()) {
+            let relPath = relativePath(of: entry.url, root: root)
+            guard relPath.hasPrefix("\(playlistFolderName)/") else { continue }
+            let fileName = String(relPath.dropFirst(playlistFolderName.count + 1))
+            guard !fileName.contains("/") else { continue }
+            sourcePlaylists[fileName] = entry
+        }
+
+        let playlistsRoot = await MainActor.run { LibraryStore.playlistsURL }
+        try fm.createDirectory(at: playlistsRoot, withIntermediateDirectories: true)
+        let destinationPlaylists = LocalDirectorySnapshot.fileMap(root: playlistsRoot)
+
+        let changedPlaylists = sourcePlaylists.filter { fileName, sourceEntry in
+            guard let existing = destinationPlaylists[fileName] else { return true }
+            return sourceEntry.size != existing.size || sourceEntry.modDate > existing.modDate
+        }
+
+        let totalUnits = changedEntries.count + deletedEntries.count + changedPlaylists.count
         var stats = WebDAVSyncStats()
         var completedUnits = 0
         await onProgress(completedUnits, totalUnits)
@@ -96,6 +133,28 @@ enum WebDAVSyncEngine {
             stats.deleted += 1
             completedUnits += 1
             await onProgress(completedUnits, totalUnits)
+        }
+
+        if !changedPlaylists.isEmpty {
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                var iterator = changedPlaylists.makeIterator()
+
+                func addNext() {
+                    guard let (fileName, sourceEntry) = iterator.next() else { return }
+                    let destinationURL = playlistsRoot.appendingPathComponent(fileName)
+                    group.addTask {
+                        try await WebDAVClient.download(from: sourceEntry.url, to: destinationURL, modificationDate: sourceEntry.modDate, credentials: credentials)
+                    }
+                }
+
+                for _ in 0..<min(WebDAVClient.maxConcurrentRequests, changedPlaylists.count) { addNext() }
+                while try await group.next() != nil {
+                    stats.playlistsUpdated += 1
+                    completedUnits += 1
+                    await onProgress(completedUnits, totalUnits)
+                    addNext()
+                }
+            }
         }
 
         LocalDirectorySnapshot.removeEmptySubdirectories(of: internalRoot)

@@ -34,8 +34,13 @@ final class LibraryStore {
         documentsURL.appendingPathComponent("Downloads", isDirectory: true)
     }
 
+    /// Lives inside Downloads, alongside the artist folders, rather than as a
+    /// sibling of Downloads — this mirrors where playlists sit relative to
+    /// artist folders on the sync server (a `_playlist` folder next to each
+    /// artist folder), so a playlist's relative song references (e.g.
+    /// `../Artist/Song.mp3`) resolve correctly without any path rewriting.
     static var playlistsURL: URL {
-        documentsURL.appendingPathComponent("Playlists", isDirectory: true)
+        downloadsURL.appendingPathComponent("_playlist", isDirectory: true)
     }
 
     var artistsAlphabetical: [String] {

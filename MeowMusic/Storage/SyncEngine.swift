@@ -13,8 +13,9 @@ struct SyncStats {
     var added = 0
     var updated = 0
     var deleted = 0
+    var playlistsUpdated = 0
 
-    var isEmpty: Bool { added == 0 && updated == 0 && deleted == 0 }
+    var isEmpty: Bool { added == 0 && updated == 0 && deleted == 0 && playlistsUpdated == 0 }
 
     var summaryText: String {
         guard !isEmpty else { return "Already up to date" }
@@ -22,11 +23,20 @@ struct SyncStats {
         if added > 0 { parts.append("\(added) added") }
         if updated > 0 { parts.append("\(updated) updated") }
         if deleted > 0 { parts.append("\(deleted) removed") }
+        if playlistsUpdated > 0 { parts.append("\(playlistsUpdated) playlist\(playlistsUpdated == 1 ? "" : "s") synced") }
         return parts.joined(separator: ", ")
     }
 }
 
 enum SyncEngine {
+    /// Playlists live in a folder named `_playlist` alongside the artist
+    /// folders at the root of the sync folder. Unlike audio files, playlists
+    /// are merged rather than mirrored: a remote playlist overwrites a local
+    /// one with the same file name, but a local playlist absent from the
+    /// external `_playlist` folder is left alone rather than deleted.
+    private static let playlistFolderName = "_playlist"
+    private static let playlistExtensions: Set<String> = ["m3u", "m3u8"]
+
     enum SyncError: LocalizedError {
         case folderNotAccessible
 
@@ -59,8 +69,18 @@ enum SyncEngine {
         let fm = FileManager.default
         try fm.createDirectory(at: internalRoot, withIntermediateDirectories: true)
 
-        let sourceFiles = LocalDirectorySnapshot.fileMap(root: externalRoot)
-        let destinationFiles = LocalDirectorySnapshot.fileMap(root: internalRoot)
+        let allSourceFiles = LocalDirectorySnapshot.fileMap(root: externalRoot)
+        let sourceFiles = allSourceFiles.filter { relativePath, _ in
+            !relativePath.hasPrefix("\(playlistFolderName)/")
+        }
+        // Playlists live in a `_playlist` subfolder inside Downloads (see
+        // `LibraryStore.playlistsURL`), so they must be excluded here —
+        // otherwise the audio mirror below would see them as files absent
+        // from the external side (they're never in `sourceFiles`, which
+        // excludes `_playlist/` above) and delete them every sync.
+        let destinationFiles = LocalDirectorySnapshot.fileMap(root: internalRoot).filter { relativePath, _ in
+            !relativePath.hasPrefix("\(playlistFolderName)/")
+        }
 
         let changedEntries = sourceFiles.filter { relativePath, sourceInfo in
             guard let existing = destinationFiles[relativePath] else { return true }
@@ -70,8 +90,26 @@ enum SyncEngine {
             sourceFiles[relativePath] == nil
         }
 
+        var sourcePlaylists: [String: LocalDirectorySnapshot.FileInfo] = [:]
+        for (relativePath, info) in allSourceFiles
+        where relativePath.hasPrefix("\(playlistFolderName)/")
+            && playlistExtensions.contains((relativePath as NSString).pathExtension.lowercased()) {
+            let fileName = String(relativePath.dropFirst(playlistFolderName.count + 1))
+            guard !fileName.contains("/") else { continue }
+            sourcePlaylists[fileName] = info
+        }
+
+        let playlistsRoot = await MainActor.run { LibraryStore.playlistsURL }
+        try fm.createDirectory(at: playlistsRoot, withIntermediateDirectories: true)
+        let destinationPlaylists = LocalDirectorySnapshot.fileMap(root: playlistsRoot)
+
+        let changedPlaylists = sourcePlaylists.filter { fileName, sourceInfo in
+            guard let existing = destinationPlaylists[fileName] else { return true }
+            return sourceInfo.size != existing.size || sourceInfo.modDate > existing.modDate
+        }
+
         var stats = SyncStats()
-        let totalUnits = max(changedEntries.count + deletedEntries.count, 1)
+        let totalUnits = max(changedEntries.count + deletedEntries.count + changedPlaylists.count, 1)
         var completedUnits = 0
 
         for (relativePath, sourceInfo) in changedEntries {
@@ -92,6 +130,16 @@ enum SyncEngine {
 
             completedUnits += 1
             await onProgress(Double(completedUnits) / Double(totalUnits), relativePath)
+        }
+
+        for (fileName, sourceInfo) in changedPlaylists {
+            let destinationURL = playlistsRoot.appendingPathComponent(fileName)
+            try? fm.removeItem(at: destinationURL)
+            try fm.copyItem(at: sourceInfo.url, to: destinationURL)
+            stats.playlistsUpdated += 1
+
+            completedUnits += 1
+            await onProgress(Double(completedUnits) / Double(totalUnits), fileName)
         }
 
         LocalDirectorySnapshot.removeEmptySubdirectories(of: internalRoot)

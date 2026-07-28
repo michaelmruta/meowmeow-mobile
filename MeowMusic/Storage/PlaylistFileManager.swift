@@ -48,7 +48,42 @@ enum PlaylistFileManager {
         try? FileManager.default.removeItem(at: fileURL(for: name))
     }
 
+    /// Indexes the library's songs once by ID and by standardized file path
+    /// so matching a playlist line against the library is O(1) instead of an
+    /// O(n) scan of every song. Playlists are re-parsed on every visit to
+    /// the Playlists tab, so a linear scan per line (across every song, for
+    /// every line, in every playlist) is the difference between instant and
+    /// a multi-second freeze once a library and a few synced playlists get
+    /// reasonably large.
+    @MainActor
+    private struct SongLookup {
+        let byID: [String: Song]
+        let byStandardizedFileURLPath: [String: Song]
+
+        init(_ library: LibraryStore) {
+            var byID: [String: Song] = [:]
+            var byPath: [String: Song] = [:]
+            byID.reserveCapacity(library.songs.count)
+            byPath.reserveCapacity(library.songs.count)
+            for song in library.songs {
+                byID[song.id] = song
+                byPath[song.fileURL.standardizedFileURL.path] = song
+            }
+            self.byID = byID
+            self.byStandardizedFileURLPath = byPath
+        }
+    }
+
     static func readPlaylist(from url: URL, library: LibraryStore) -> PlaylistFile? {
+        readPlaylist(from: url, lookup: SongLookup(library))
+    }
+
+    static func readExistingPlaylists(library: LibraryStore) -> [PlaylistFile] {
+        let lookup = SongLookup(library)
+        return existingPlaylistFiles().compactMap { readPlaylist(from: $0, lookup: lookup) }
+    }
+
+    private static func readPlaylist(from url: URL, lookup: SongLookup) -> PlaylistFile? {
         guard let content = readString(from: url) else { return nil }
 
         var playlistName = url.deletingPathExtension().lastPathComponent
@@ -68,16 +103,12 @@ enum PlaylistFileManager {
 
             guard !line.hasPrefix("#") else { continue }
 
-            if let songPath = normalizedSongPath(from: line, playlistURL: url, library: library) {
+            if let songPath = normalizedSongPath(from: line, playlistURL: url, lookup: lookup) {
                 songPaths.append(songPath)
             }
         }
 
         return PlaylistFile(name: playlistName, songPaths: songPaths, url: url)
-    }
-
-    static func readExistingPlaylists(library: LibraryStore) -> [PlaylistFile] {
-        existingPlaylistFiles().compactMap { readPlaylist(from: $0, library: library) }
     }
 
     private static func existingPlaylistFiles() -> [URL] {
@@ -99,10 +130,12 @@ enum PlaylistFileManager {
     }
 
     private static func m3uPathLine(for songPath: String) -> String {
-        "../\(songPath)"
+        let downloadsPrefix = "Downloads/"
+        let relativeToDownloads = songPath.hasPrefix(downloadsPrefix) ? String(songPath.dropFirst(downloadsPrefix.count)) : songPath
+        return "../\(relativeToDownloads)"
     }
 
-    private static func normalizedSongPath(from line: String, playlistURL: URL, library: LibraryStore) -> String? {
+    private static func normalizedSongPath(from line: String, playlistURL: URL, lookup: SongLookup) -> String? {
         let rawPath = (line.removingPercentEncoding ?? line)
             .replacingOccurrences(of: "\\", with: "/")
 
@@ -118,10 +151,10 @@ enum PlaylistFileManager {
         }
 
         if path.hasPrefix("/") {
-            return documentsRelativePath(fromAbsolutePath: path, library: library)
+            return documentsRelativePath(fromAbsolutePath: path, lookup: lookup)
         }
 
-        if library.song(withID: path) != nil || path.hasPrefix("Downloads/") {
+        if lookup.byID[path] != nil || path.hasPrefix("Downloads/") {
             return path
         }
 
@@ -129,10 +162,10 @@ enum PlaylistFileManager {
             .deletingLastPathComponent()
             .appendingPathComponent(path)
             .standardizedFileURL
-        return documentsRelativePath(fromAbsolutePath: resolvedURL.path, library: library)
+        return documentsRelativePath(fromAbsolutePath: resolvedURL.path, lookup: lookup)
     }
 
-    private static func documentsRelativePath(fromAbsolutePath path: String, library: LibraryStore) -> String? {
+    private static func documentsRelativePath(fromAbsolutePath path: String, lookup: SongLookup) -> String? {
         let documentsPath = LibraryStore.documentsURL.standardizedFileURL.path
         let standardizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
 
@@ -140,6 +173,6 @@ enum PlaylistFileManager {
             return String(standardizedPath.dropFirst(documentsPath.count + 1))
         }
 
-        return library.songs.first { $0.fileURL.standardizedFileURL.path == standardizedPath }?.id
+        return lookup.byStandardizedFileURLPath[standardizedPath]?.id
     }
 }
