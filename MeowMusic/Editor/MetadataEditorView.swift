@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct MetadataEditorView: View {
     @Environment(PlayerService.self) private var player
@@ -13,9 +14,22 @@ struct MetadataEditorView: View {
     @State private var titleText = ""
     @State private var artistText = ""
     @State private var albumText = ""
+    @State private var albumArtistText = ""
+    @State private var genreText = ""
+    @State private var trackNumberText = ""
+    @State private var yearText = ""
+    @State private var composerText = ""
     @State private var lyricsPreview = ""
     @State private var isSaving = false
+    @State private var isFetchingArt = false
+    @State private var isFetchingLyrics = false
     @State private var errorMessage: String?
+
+    private var displayLyricLines: [LyricLine] {
+        guard !lyricsPreview.isEmpty else { return [] }
+        let parsed = LyricsService.parseLRC(lyricsPreview)
+        return parsed.isEmpty ? LyricsService.plainLines(lyricsPreview) : parsed
+    }
 
     var body: some View {
         NavigationStack {
@@ -71,9 +85,14 @@ struct MetadataEditorView: View {
                 titleText = song.title
                 artistText = song.artist
                 albumText = song.album
+                albumArtistText = song.albumArtist
+                genreText = song.genre
+                trackNumberText = song.trackNumber.map(String.init) ?? ""
+                yearText = song.year.map(String.init) ?? ""
+                composerText = song.composer
                 lyricsPreview = await LyricsService.loadRawText(for: song)
             }
-            .alert("Couldn't Save", isPresented: Binding(
+            .alert("Error", isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
             )) {
@@ -88,9 +107,16 @@ struct MetadataEditorView: View {
     private func infoTab(_ song: Song) -> some View {
         Form {
             Section("Details") {
-                TextField("Title", text: $titleText)
-                TextField("Artist", text: $artistText)
-                TextField("Album", text: $albumText)
+                labeledField("Title", text: $titleText)
+                labeledField("Artist", text: $artistText)
+                labeledField("Album", text: $albumText)
+                HStack(spacing: 16) {
+                    labeledField("Year", text: $yearText, keyboardType: .numberPad)
+                    labeledField("Track #", text: $trackNumberText, keyboardType: .numberPad)
+                    labeledField("Genre", text: $genreText)
+                }
+                labeledField("Album Artist", text: $albumArtistText)
+                labeledField("Composer", text: $composerText)
             }
             .listRowBackground(Theme.card)
 
@@ -98,7 +124,7 @@ struct MetadataEditorView: View {
                 LabeledContent("Duration", value: formattedDuration(song.duration))
                 LabeledContent("Bitrate", value: formattedBitrate(song.bitrateKbps))
                 LabeledContent("Format", value: song.fileURL.pathExtension.uppercased())
-                LabeledContent("File Name", value: song.fileURL.lastPathComponent)
+                LabeledContent("Codec", value: song.codec ?? "Unknown")
             }
             .listRowBackground(Theme.card)
 
@@ -118,7 +144,9 @@ struct MetadataEditorView: View {
     private func coverTab(_ song: Song) -> some View {
         VStack(spacing: 20) {
             ReflectedArtwork(artwork: song.artwork, size: 220)
-            fetchStubButton(title: "Fetch Album Art")
+            fetchButton(title: "Fetch Album Art", isLoading: isFetchingArt) {
+                fetchArtwork(for: song)
+            }
         }
         .padding(.top, 24)
     }
@@ -126,46 +154,129 @@ struct MetadataEditorView: View {
     @ViewBuilder
     private func lyricsTab() -> some View {
         VStack(spacing: 16) {
-            fetchStubButton(title: "Fetch Lyrics")
+            fetchButton(title: "Fetch Lyrics", isLoading: isFetchingLyrics) {
+                fetchLyrics()
+            }
 
             ScrollView {
-                Text(lyricsPreview.isEmpty ? "No lyrics found." : lyricsPreview)
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.secondaryText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                if displayLyricLines.isEmpty {
+                    Text("No lyrics found.")
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.secondaryText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(displayLyricLines) { line in
+                            HStack(alignment: .top, spacing: 10) {
+                                if let time = line.time {
+                                    Text(formattedDuration(time))
+                                        .font(.caption.monospacedDigit())
+                                        .foregroundStyle(Theme.tertiaryText)
+                                        .frame(width: 44, alignment: .leading)
+                                }
+                                Text(line.text.isEmpty ? " " : line.text)
+                                    .font(.subheadline)
+                                    .foregroundStyle(Theme.secondaryText)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                    }
                     .padding()
+                }
             }
         }
         .padding(.top, 16)
     }
 
-    private func fetchStubButton(title: String) -> some View {
-        VStack(spacing: 6) {
-            Button {
-                // Fetching is not implemented yet.
-            } label: {
+    private func labeledField(_ label: String, text: Binding<String>, keyboardType: UIKeyboardType = .default) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(Theme.tertiaryText)
+            TextField(label, text: text)
+                .keyboardType(keyboardType)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func fetchButton(title: String, isLoading: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            if isLoading {
+                ProgressView()
+            } else {
                 Label(title, systemImage: "sparkles")
             }
-            .buttonStyle(.borderedProminent)
-            .tint(Theme.orange)
-            .disabled(true)
-            Text("Coming soon")
-                .font(.caption)
-                .foregroundStyle(Theme.tertiaryText)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(Theme.orange)
+        .disabled(isLoading)
+    }
+
+    private func fetchArtwork(for song: Song) {
+        isFetchingArt = true
+        Task {
+            defer { isFetchingArt = false }
+            do {
+                let artwork = try await ArtworkFetchService.fetchArtwork(
+                    artist: song.artist, album: song.album, title: song.title
+                )
+                try await MetadataWriter.write(.init(artwork: artwork), to: song)
+                player.updateCurrentSongArtwork(artwork)
+                await library.scan()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func fetchLyrics() {
+        guard let song = player.currentSong else { return }
+        isFetchingLyrics = true
+        Task {
+            defer { isFetchingLyrics = false }
+            do {
+                let lyrics = try await LyricsFetchService.fetchLyrics(artist: song.artist, title: song.title)
+                LyricsService.save(lyrics, for: song)
+                lyricsPreview = lyrics
+            } catch {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
     private func save() {
         guard let song = player.currentSong else { return }
         isSaving = true
+        let trackNumber = Int(trackNumberText.trimmingCharacters(in: .whitespaces))
+        let year = Int(yearText.trimmingCharacters(in: .whitespaces))
         Task {
             defer { isSaving = false }
             do {
                 try await MetadataWriter.write(
-                    .init(title: titleText, artist: artistText, album: albumText, artwork: nil),
+                    .init(
+                        title: titleText,
+                        artist: artistText,
+                        album: albumText,
+                        albumArtist: albumArtistText,
+                        genre: genreText,
+                        trackNumber: trackNumber,
+                        year: year,
+                        composer: composerText,
+                        artwork: nil
+                    ),
                     to: song
                 )
-                player.updateCurrentSongMetadata(title: titleText, artist: artistText, album: albumText)
+                player.updateCurrentSongMetadata(
+                    title: titleText,
+                    artist: artistText,
+                    album: albumText,
+                    albumArtist: albumArtistText,
+                    genre: genreText,
+                    trackNumber: trackNumber,
+                    year: year,
+                    composer: composerText
+                )
                 await library.scan()
             } catch {
                 errorMessage = error.localizedDescription

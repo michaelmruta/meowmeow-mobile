@@ -8,8 +8,14 @@ struct Song: Identifiable, Equatable, Hashable, Codable {
     var title: String
     var artist: String
     var album: String
+    var albumArtist: String
+    var genre: String
+    var trackNumber: Int?
+    var year: Int?
+    var composer: String
     var duration: TimeInterval
     var bitrateKbps: Int?
+    var codec: String?
     var artwork: Data?
     var fileURL: URL
     var dateAdded: Date

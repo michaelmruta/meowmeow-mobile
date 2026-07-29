@@ -5,16 +5,35 @@ struct BrowseView: View {
     @Environment(PlayerService.self) private var player
     @Environment(TabRouter.self) private var tabRouter
     @State private var searchText = ""
+    @State private var searchScope: SearchScope = .all
+
+    private enum SearchScope: String, CaseIterable {
+        case all = "All", artists = "Artists", albums = "Albums", songs = "Songs", genre = "Genre"
+    }
 
     private var searchResults: [Song] {
         guard !searchText.isEmpty else { return [] }
         return library.songs
-            .filter {
-                $0.title.localizedCaseInsensitiveContains(searchText) ||
-                $0.artist.localizedCaseInsensitiveContains(searchText) ||
-                $0.album.localizedCaseInsensitiveContains(searchText)
-            }
+            .filter { matches($0) }
             .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+    }
+
+    private func matches(_ song: Song) -> Bool {
+        switch searchScope {
+        case .all:
+            return song.title.localizedCaseInsensitiveContains(searchText) ||
+                song.artist.localizedCaseInsensitiveContains(searchText) ||
+                song.album.localizedCaseInsensitiveContains(searchText) ||
+                song.genre.localizedCaseInsensitiveContains(searchText)
+        case .artists:
+            return song.artist.localizedCaseInsensitiveContains(searchText)
+        case .albums:
+            return song.album.localizedCaseInsensitiveContains(searchText)
+        case .songs:
+            return song.title.localizedCaseInsensitiveContains(searchText)
+        case .genre:
+            return song.genre.localizedCaseInsensitiveContains(searchText)
+        }
     }
 
     var body: some View {
@@ -66,6 +85,11 @@ struct BrowseView: View {
         .background(Theme.background)
         .navigationTitle("Browse")
         .searchable(text: $searchText, prompt: "Search artists, albums, songs")
+        .searchScopes($searchScope) {
+            ForEach(SearchScope.allCases, id: \.self) { scope in
+                Text(scope.rawValue).tag(scope)
+            }
+        }
         .navigationDestination(for: String.self) { artist in
             ArtistAlbumsView(artist: artist)
         }

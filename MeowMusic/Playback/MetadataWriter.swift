@@ -7,10 +7,15 @@ import AVFoundation
 /// left untouched and the caller should show that editing isn't available.
 enum MetadataWriter {
     struct Update {
-        var title: String?
-        var artist: String?
-        var album: String?
-        var artwork: Data?
+        var title: String? = nil
+        var artist: String? = nil
+        var album: String? = nil
+        var albumArtist: String? = nil
+        var genre: String? = nil
+        var trackNumber: Int? = nil
+        var year: Int? = nil
+        var composer: String? = nil
+        var artwork: Data? = nil
     }
 
     enum WriterError: LocalizedError {
@@ -44,50 +49,68 @@ enum MetadataWriter {
         }
 
         let existingMetadata = (try? await asset.load(.metadata)) ?? []
-        var replacedKeys = Set<AVMetadataKey>()
-        if update.title != nil { replacedKeys.insert(.commonKeyTitle) }
-        if update.artist != nil { replacedKeys.insert(.commonKeyArtist) }
-        if update.album != nil { replacedKeys.insert(.commonKeyAlbumName) }
-        if update.artwork != nil { replacedKeys.insert(.commonKeyArtwork) }
+
+        // Items are matched for removal by `commonKey` (which native format
+        // items carry too, not just the synthesized `.common` keyspace copy)
+        // or by `identifier` for fields with no common-keyspace equivalent,
+        // so the old value doesn't linger alongside the new one after export.
+        var replacedCommonKeys = Set<AVMetadataKey>()
+        if update.title != nil { replacedCommonKeys.insert(.commonKeyTitle) }
+        if update.artist != nil { replacedCommonKeys.insert(.commonKeyArtist) }
+        if update.album != nil { replacedCommonKeys.insert(.commonKeyAlbumName) }
+        if update.artwork != nil { replacedCommonKeys.insert(.commonKeyArtwork) }
+        if update.year != nil { replacedCommonKeys.insert(.commonKeyCreationDate) }
+
+        var replacedIdentifiers = Set<AVMetadataIdentifier>()
+        if update.albumArtist != nil { replacedIdentifiers.insert(.iTunesMetadataAlbumArtist) }
+        if update.genre != nil {
+            replacedIdentifiers.insert(.iTunesMetadataUserGenre)
+            replacedIdentifiers.insert(.iTunesMetadataPredefinedGenre)
+        }
+        if update.trackNumber != nil { replacedIdentifiers.insert(.iTunesMetadataTrackNumber) }
+        if update.composer != nil { replacedIdentifiers.insert(.iTunesMetadataComposer) }
 
         let artworkToPreserve = update.artwork == nil && !existingMetadata.contains(where: isArtworkItem)
             ? song.artwork
             : nil
         var items = existingMetadata.filter { item in
-            guard item.keySpace == .common,
-                  let key = item.key as? String,
-                  replacedKeys.contains(AVMetadataKey(rawValue: key)) else {
-                return true
-            }
-            return false
+            if let key = item.commonKey, replacedCommonKeys.contains(key) { return false }
+            if let identifier = item.identifier, replacedIdentifiers.contains(identifier) { return false }
+            return true
         }
         if let title = update.title { items.append(metadataItem(.commonKeyTitle, value: title as NSString)) }
         if let artist = update.artist { items.append(metadataItem(.commonKeyArtist, value: artist as NSString)) }
         if let album = update.album { items.append(metadataItem(.commonKeyAlbumName, value: album as NSString)) }
+        if let albumArtist = update.albumArtist {
+            items.append(iTunesMetadataItem(.iTunesMetadataKeyAlbumArtist, value: albumArtist as NSString))
+        }
+        if let genre = update.genre {
+            items.append(iTunesMetadataItem(.iTunesMetadataKeyUserGenre, value: genre as NSString))
+        }
+        if let trackNumber = update.trackNumber {
+            items.append(iTunesMetadataItem(.iTunesMetadataKeyTrackNumber, value: NSNumber(value: trackNumber)))
+        }
+        if let year = update.year {
+            items.append(metadataItem(.commonKeyCreationDate, value: "\(year)" as NSString))
+        }
+        if let composer = update.composer {
+            items.append(iTunesMetadataItem(.iTunesMetadataKeyComposer, value: composer as NSString))
+        }
         if let artwork = update.artwork ?? artworkToPreserve {
             items.append(metadataItem(.commonKeyArtwork, value: artwork as NSData))
         }
         exportSession.metadata = items
 
         let ext = song.fileURL.pathExtension.lowercased()
-        exportSession.outputFileType = ext == "mp4" ? .mp4 : .m4a
+        let outputFileType: AVFileType = ext == "mp4" ? .mp4 : .m4a
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension(ext)
-        exportSession.outputURL = tempURL
 
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            exportSession.exportAsynchronously {
-                switch exportSession.status {
-                case .completed:
-                    continuation.resume()
-                case .failed, .cancelled:
-                    let message = exportSession.error?.localizedDescription ?? "unknown error"
-                    continuation.resume(throwing: WriterError.exportFailed(message))
-                default:
-                    continuation.resume(throwing: WriterError.exportFailed("unexpected export status"))
-                }
-            }
+        do {
+            try await exportSession.export(to: tempURL, as: outputFileType)
+        } catch {
+            throw WriterError.exportFailed(error.localizedDescription)
         }
 
         let fm = FileManager.default
@@ -108,6 +131,14 @@ enum MetadataWriter {
     private static func metadataItem(_ key: AVMetadataKey, value: NSCopying & NSObjectProtocol) -> AVMetadataItem {
         let item = AVMutableMetadataItem()
         item.keySpace = .common
+        item.key = key.rawValue as NSString
+        item.value = value
+        return item
+    }
+
+    private static func iTunesMetadataItem(_ key: AVMetadataKey, value: NSCopying & NSObjectProtocol) -> AVMetadataItem {
+        let item = AVMutableMetadataItem()
+        item.keySpace = .iTunes
         item.key = key.rawValue as NSString
         item.value = value
         return item

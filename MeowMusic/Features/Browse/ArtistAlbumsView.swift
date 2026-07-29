@@ -13,8 +13,23 @@ struct ArtistAlbumsView: View {
 
     private var displayedSongs: [Song] {
         let songs = library.songs(forArtist: artist)
-        let filtered = selectedAlbum.map { album in songs.filter { $0.album == album } } ?? songs
-        return filtered.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        guard let selectedAlbum else {
+            return songs.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        }
+        return songs
+            .filter { $0.album == selectedAlbum }
+            .sorted { lhs, rhs in
+                switch (lhs.trackNumber, rhs.trackNumber) {
+                case let (l?, r?) where l != r:
+                    return l < r
+                case (nil, .some):
+                    return false
+                case (.some, nil):
+                    return true
+                default:
+                    return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+                }
+            }
     }
 
     var body: some View {

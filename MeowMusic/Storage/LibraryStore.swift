@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import AudioToolbox
 import Observation
 
 /// Scans Documents/Downloads/<Artist>/<file> and keeps an in-memory library.
@@ -290,8 +291,43 @@ final class LibraryStore {
 
         Suggested layout:
         Downloads/Artist Name/Song Title.mp3
+
+        Playlists:
+        Add a _playlist folder next to your artist folders:
+        Downloads/_playlist/My Playlist.m3u
+
+        Each .m3u file is a standard extended M3U playlist. List one song
+        per line, as a path relative to the _playlist folder, e.g.:
+        ../Artist Name/Song Title.mp3
         """
         try? text.write(to: fileURL, atomically: true, encoding: .utf8)
+    }
+
+    nonisolated private static func codecName(for formatID: AudioFormatID) -> String? {
+        switch formatID {
+        case kAudioFormatMPEG4AAC, kAudioFormatMPEG4AAC_HE, kAudioFormatMPEG4AAC_HE_V2,
+             kAudioFormatMPEG4AAC_LD, kAudioFormatMPEG4AAC_ELD, kAudioFormatMPEG4AAC_ELD_SBR,
+             kAudioFormatMPEG4AAC_ELD_V2, kAudioFormatMPEG4AAC_Spatial:
+            return "AAC"
+        case kAudioFormatAppleLossless:
+            return "ALAC"
+        case kAudioFormatMPEGLayer3:
+            return "MP3"
+        case kAudioFormatFLAC:
+            return "FLAC"
+        case kAudioFormatLinearPCM:
+            return "PCM"
+        default:
+            return nil
+        }
+    }
+
+    /// Creation-date tags come in as either a bare year ("1985") or a full
+    /// date/timestamp ("1985-06-21T00:00:00Z"), so pull the first 4-digit
+    /// run out rather than assuming a format.
+    nonisolated private static func extractYear(from string: String) -> Int? {
+        guard let match = string.range(of: #"\d{4}"#, options: .regularExpression) else { return nil }
+        return Int(string[match])
     }
 
     private static func loadSong(at url: URL, documentsRoot: URL) async -> Song? {
@@ -305,23 +341,49 @@ final class LibraryStore {
         var title = fallbackTitle
         var artist = artistFolder
         var album = artistFolder
+        var albumArtist = ""
+        var genre = ""
+        var trackNumber: Int?
+        var year: Int?
+        var composer = ""
         var artwork: Data?
         var duration: TimeInterval = 0
         var bitrateKbps: Int?
 
         let asset = AVURLAsset(url: url)
-        if let metadata = try? await asset.load(.commonMetadata) {
+        if let metadata = try? await asset.load(.metadata) {
             for item in metadata {
-                guard let key = item.commonKey else { continue }
-                switch key {
-                case .commonKeyTitle:
-                    if let v = try? await item.load(.stringValue), !v.isEmpty { title = v }
-                case .commonKeyArtist:
-                    if let v = try? await item.load(.stringValue), !v.isEmpty { artist = v }
-                case .commonKeyAlbumName:
-                    if let v = try? await item.load(.stringValue), !v.isEmpty { album = v }
-                case .commonKeyArtwork:
-                    if let v = try? await item.load(.dataValue) { artwork = v }
+                if let key = item.commonKey {
+                    switch key {
+                    case .commonKeyTitle:
+                        if let v = try? await item.load(.stringValue), !v.isEmpty { title = v }
+                    case .commonKeyArtist:
+                        if let v = try? await item.load(.stringValue), !v.isEmpty { artist = v }
+                    case .commonKeyAlbumName:
+                        if let v = try? await item.load(.stringValue), !v.isEmpty { album = v }
+                    case .commonKeyArtwork:
+                        if let v = try? await item.load(.dataValue) { artwork = v }
+                    case .commonKeyCreationDate:
+                        if let v = try? await item.load(.stringValue), let y = Self.extractYear(from: v) { year = y }
+                    default:
+                        break
+                    }
+                }
+                switch item.identifier {
+                case .iTunesMetadataAlbumArtist, .id3MetadataBand:
+                    if let v = try? await item.load(.stringValue), !v.isEmpty { albumArtist = v }
+                case .iTunesMetadataUserGenre, .id3MetadataContentType:
+                    if let v = try? await item.load(.stringValue), !v.isEmpty { genre = v }
+                case .iTunesMetadataTrackNumber:
+                    if let v = try? await item.load(.numberValue) { trackNumber = v.intValue }
+                case .id3MetadataTrackNumber:
+                    if let v = try? await item.load(.stringValue) {
+                        trackNumber = Int(v.split(separator: "/").first ?? "")
+                    } else if let v = try? await item.load(.numberValue) {
+                        trackNumber = v.intValue
+                    }
+                case .iTunesMetadataComposer, .id3MetadataComposer:
+                    if let v = try? await item.load(.stringValue), !v.isEmpty { composer = v }
                 default:
                     break
                 }
@@ -330,6 +392,7 @@ final class LibraryStore {
         if let seconds = try? await asset.load(.duration).seconds, seconds.isFinite {
             duration = seconds
         }
+        var codec: String?
         if let audioTracks = try? await asset.loadTracks(withMediaType: .audio) {
             var totalBitrate: Float = 0
             for track in audioTracks {
@@ -339,6 +402,11 @@ final class LibraryStore {
             }
             if totalBitrate > 0 {
                 bitrateKbps = Int((totalBitrate / 1000).rounded())
+            }
+            if codec == nil,
+               let formatDescriptions = try? await audioTracks.first?.load(.formatDescriptions),
+               let mediaSubType = formatDescriptions.first?.audioStreamBasicDescription?.mFormatID {
+                codec = Self.codecName(for: mediaSubType)
             }
         }
         if bitrateKbps == nil, let fileSize, duration > 0 {
@@ -350,8 +418,14 @@ final class LibraryStore {
             title: title,
             artist: artist,
             album: album,
+            albumArtist: albumArtist.isEmpty ? artist : albumArtist,
+            genre: genre,
+            trackNumber: trackNumber,
+            year: year,
+            composer: composer,
             duration: duration,
             bitrateKbps: bitrateKbps,
+            codec: codec,
             artwork: artwork,
             fileURL: url,
             dateAdded: dateAdded

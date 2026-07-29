@@ -168,11 +168,37 @@ final class PlayerService {
 
     /// Patches the in-memory current song after a metadata edit, without
     /// restarting playback, so the Player/lock-screen reflect the new tags.
-    func updateCurrentSongMetadata(title: String, artist: String, album: String) {
+    func updateCurrentSongMetadata(
+        title: String,
+        artist: String,
+        album: String,
+        albumArtist: String,
+        genre: String,
+        trackNumber: Int?,
+        year: Int?,
+        composer: String
+    ) {
         guard var song = currentSong else { return }
         song.title = title
         song.artist = artist
         song.album = album
+        song.albumArtist = albumArtist
+        song.genre = genre
+        song.trackNumber = trackNumber
+        song.year = year
+        song.composer = composer
+        currentSong = song
+        if let index = queue.firstIndex(where: { $0.id == song.id }) {
+            queue[index] = song
+        }
+        updateNowPlayingInfo()
+    }
+
+    /// Patches the in-memory current song's artwork after a fetch/save, same
+    /// rationale as `updateCurrentSongMetadata`.
+    func updateCurrentSongArtwork(_ artwork: Data) {
+        guard var song = currentSong else { return }
+        song.artwork = artwork
         currentSong = song
         if let index = queue.firstIndex(where: { $0.id == song.id }) {
             queue[index] = song
