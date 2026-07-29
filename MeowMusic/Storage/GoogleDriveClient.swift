@@ -161,20 +161,16 @@ enum GoogleDriveClient {
     /// seconds, but not always, so both variants are tried.
     private static func parseDate(_ string: String?) -> Date? {
         guard let string else { return nil }
-        return withFractionalSeconds.date(from: string) ?? withoutFractionalSeconds.date(from: string)
+        let withFractionalSeconds = ISO8601DateFormatter()
+        withFractionalSeconds.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = withFractionalSeconds.date(from: string) {
+            return date
+        }
+
+        let withoutFractionalSeconds = ISO8601DateFormatter()
+        withoutFractionalSeconds.formatOptions = [.withInternetDateTime]
+        return withoutFractionalSeconds.date(from: string)
     }
-
-    private static let withFractionalSeconds: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
-    private static let withoutFractionalSeconds: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
 }
 
 private struct DriveFileListResponse: Decodable {

@@ -21,7 +21,7 @@ enum WebDAVError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidServerURL:
-            return "Enter a valid WebDAV server URL, starting with http:// or https://."
+            return "Enter an HTTPS WebDAV URL, or an HTTP URL on your local network."
         case .invalidResponse:
             return "The server sent an unexpected response."
         case .http(401), .http(403):

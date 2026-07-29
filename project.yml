@@ -18,6 +18,11 @@ settings:
     ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
     ENABLE_PREVIEWS: YES
 
+packages:
+  GoogleSignIn:
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: 9.0.0
+
 targets:
   MeowMusic:
     type: application
@@ -31,14 +36,25 @@ targets:
       path: MeowMusic/Resources/Info.plist
       properties:
         CFBundleDisplayName: Meow Music
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "2"
+        CFBundleURLTypes:
+          - CFBundleTypeRole: Editor
+            CFBundleURLSchemes:
+              - com.googleusercontent.apps.1041730774018-4ao6k3oo7hcf3vm2ju1qh7ul13c6o6rv
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         NSAppTransportSecurity:
-          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
         UIBackgroundModes:
           - audio
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        "UISupportedInterfaceOrientations~ipad":
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         UIUserInterfaceStyle: Dark
         UILaunchScreen:
           UIColorName: AppBlack
@@ -47,6 +63,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.michaelruta.MeowMusic
         PRODUCT_NAME: MeowMusic
+        TARGETED_DEVICE_FAMILY: "1"
+    dependencies:
+      - package: GoogleSignIn
+        product: GoogleSignIn
     schemes:
       MeowMusic:
         build:

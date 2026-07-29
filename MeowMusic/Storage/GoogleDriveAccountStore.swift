@@ -7,7 +7,7 @@ import GoogleSignIn
 /// sign-in / connection state. Unlike `WebDAVAccountStore`, no
 /// username/password is stored here — the GoogleSignIn SDK owns the OAuth
 /// tokens in its own Keychain storage and hands back a fresh access token on
-/// request via `accessToken()`.
+/// request via `credentials()`.
 @MainActor
 @Observable
 final class GoogleDriveAccountStore {
@@ -86,13 +86,14 @@ final class GoogleDriveAccountStore {
         return trimmed
     }
 
-    /// Fetches a fresh access token, silently refreshing it if it's expired.
-    /// Passed around as a closure (rather than a `GIDGoogleUser` value)
-    /// so `GoogleDriveClient`/`GoogleDriveSyncEngine` stay decoupled from
-    /// the GoogleSignIn SDK's types.
-    nonisolated func accessToken() async throws -> String {
-        guard let user = await GIDSignIn.sharedInstance.currentUser else { throw GoogleDriveError.notSignedIn }
-        return try await withCheckedThrowingContinuation { continuation in
+    /// Fetches a fresh access token, silently refreshing it if it's expired,
+    /// and wraps it in a plain `Sendable` value. `GoogleDriveClient` and
+    /// `GoogleDriveSyncEngine` take that value rather than a live
+    /// token-fetching closure or a `GIDGoogleUser` reference, so it can be
+    /// captured safely inside concurrent task-group closures during a sync.
+    func credentials() async throws -> GoogleDriveCredentials {
+        guard let user = GIDSignIn.sharedInstance.currentUser else { throw GoogleDriveError.notSignedIn }
+        let token = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
             user.refreshTokensIfNeeded { refreshedUser, error in
                 if let error {
                     continuation.resume(throwing: error)
@@ -105,6 +106,7 @@ final class GoogleDriveAccountStore {
                 continuation.resume(returning: token)
             }
         }
+        return GoogleDriveCredentials(accessToken: token)
     }
 
     func testConnection() async {
@@ -118,7 +120,8 @@ final class GoogleDriveAccountStore {
         defer { isTestingConnection = false }
 
         do {
-            try await GoogleDriveClient.testConnection(folderID: resolvedFolderID, accessToken: accessToken)
+            let credentials = try await credentials()
+            try await GoogleDriveClient.testConnection(folderID: resolvedFolderID, credentials: credentials)
             isConnected = true
         } catch {
             isConnected = false

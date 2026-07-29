@@ -45,14 +45,16 @@ final class WebDAVAccountStore {
     }
 
     /// The configured remote root: server URL plus the optional sub-folder.
-    /// `nil` if the server URL isn't a valid http(s) URL.
+    /// Public servers must use HTTPS. Plain HTTP is accepted only for local
+    /// network hosts, where users commonly run self-hosted WebDAV services.
     var rootURL: URL? {
         let trimmedServer = serverURLString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedServer.isEmpty,
               let parsed = URL(string: trimmedServer),
               let scheme = parsed.scheme,
               ["http", "https"].contains(scheme.lowercased()),
-              parsed.host != nil else { return nil }
+              let host = parsed.host,
+              scheme.lowercased() == "https" || Self.isLocalHost(host) else { return nil }
 
         var absoluteString = parsed.absoluteString
         if !absoluteString.hasSuffix("/") { absoluteString += "/" }
@@ -63,9 +65,31 @@ final class WebDAVAccountStore {
         return serverRoot.appendingPathComponent(trimmedPath, isDirectory: true)
     }
 
+    private static func isLocalHost(_ host: String) -> Bool {
+        let lowercased = host.lowercased()
+        if lowercased == "localhost" || lowercased.hasSuffix(".local") {
+            return true
+        }
+
+        if lowercased.contains(":") {
+            return lowercased == "::1" || lowercased.hasPrefix("fe80:")
+        }
+
+        let octets = lowercased.split(separator: ".").compactMap { Int($0) }
+        guard octets.count == 4, octets.allSatisfy({ (0...255).contains($0) }) else {
+            return false
+        }
+
+        return octets[0] == 10
+            || octets[0] == 127
+            || (octets[0] == 169 && octets[1] == 254)
+            || (octets[0] == 172 && (16...31).contains(octets[1]))
+            || (octets[0] == 192 && octets[1] == 168)
+    }
+
     func testConnection() async {
         guard let root = rootURL else {
-            connectionError = "Enter a valid server URL."
+            connectionError = "Enter an HTTPS URL, or a local-network HTTP URL."
             isConnected = false
             return
         }
