@@ -54,10 +54,15 @@ struct PlayerView: View {
                         .font(.title2.weight(.semibold))
                         .foregroundStyle(Theme.primaryText)
                         .lineLimit(1)
-                    Text(song.artist)
-                        .font(.headline)
-                        .foregroundStyle(Theme.secondaryText)
-                        .lineLimit(1)
+                    Button {
+                        tabRouter.openArtist(song.artist)
+                    } label: {
+                        Text(song.artist)
+                            .font(.headline)
+                            .foregroundStyle(Theme.secondaryText)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
                 }
                 .padding(.top, 20)
                 .padding(.horizontal, 32)

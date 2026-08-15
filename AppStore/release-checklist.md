@@ -4,7 +4,7 @@
 
 - [x] Bundle identifier: `com.michaelruta.MeowMusic`
 - [x] Version: `1.0`
-- [x] Build: `2`
+- [x] Build: `5`
 - [x] App icon
 - [x] iPhone-only release and iPhone screenshot set
 - [x] Privacy manifest

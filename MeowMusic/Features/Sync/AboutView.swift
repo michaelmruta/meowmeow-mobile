@@ -3,25 +3,26 @@ import SwiftUI
 struct AboutView: View {
     @Environment(\.dismiss) private var dismiss
 
-    private let supportURL = URL(string: "https://meow-music-support.michael-ruta.chatgpt.site/#support")!
-    private let privacyURL = URL(string: "https://meow-music-support.michael-ruta.chatgpt.site/#privacy")!
+    private let supportURL = URL(string: "mailto:support@uchu-neko.com")!
+    private let privacyURL = URL(string: "https://uchu-neko.com/#privacy-policy")!
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     HStack(spacing: 16) {
-                        Image(systemName: "music.note")
-                            .font(.system(size: 34, weight: .semibold))
-                            .foregroundStyle(.white)
+                        Image("AppIconDisplay")
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
                             .frame(width: 72, height: 72)
-                            .background(Theme.orange)
                             .clipShape(RoundedRectangle(cornerRadius: 16))
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Meow Music")
                                 .font(.title2.bold())
                             Text(versionText)
+                                .foregroundStyle(Theme.secondaryText)
+                            Text("by Uchu-Neko")
                                 .foregroundStyle(Theme.secondaryText)
                         }
                     }

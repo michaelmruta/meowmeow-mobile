@@ -73,10 +73,16 @@ enum MetadataWriter {
         let artworkToPreserve = update.artwork == nil && !existingMetadata.contains(where: isArtworkItem)
             ? song.artwork
             : nil
-        var items = existingMetadata.filter { item in
-            if let key = item.commonKey, replacedCommonKeys.contains(key) { return false }
-            if let identifier = item.identifier, replacedIdentifiers.contains(identifier) { return false }
-            return true
+        var items: [AVMetadataItem] = []
+        for existing in existingMetadata {
+            if let key = existing.commonKey, replacedCommonKeys.contains(key) { continue }
+            if let identifier = existing.identifier, replacedIdentifiers.contains(identifier) { continue }
+            // Rebuild each preserved item as a fresh mutable item with its value
+            // eagerly loaded. Passing source items directly drops long text values
+            // (notably embedded lyrics) during passthrough export because their
+            // `value` is lazily resolved and the exporter reads it too late.
+            guard let preserved = await preservedCopy(of: existing) else { continue }
+            items.append(preserved)
         }
         if let title = update.title { items.append(metadataItem(.commonKeyTitle, value: title as NSString)) }
         if let artist = update.artist { items.append(metadataItem(.commonKeyArtist, value: artist as NSString)) }
@@ -146,5 +152,23 @@ enum MetadataWriter {
 
     private static func isArtworkItem(_ item: AVMetadataItem) -> Bool {
         item.commonKey == .commonKeyArtwork
+    }
+
+    private static func preservedCopy(of item: AVMetadataItem) async -> AVMetadataItem? {
+        let value = try? await item.load(.value)
+        guard let value else { return nil }
+        let mutable = AVMutableMetadataItem()
+        mutable.identifier = item.identifier
+        mutable.key = item.key
+        mutable.keySpace = item.keySpace
+        mutable.locale = item.locale
+        mutable.time = item.time
+        mutable.duration = item.duration
+        mutable.value = value
+        mutable.dataType = item.dataType
+        if let extra = try? await item.load(.extraAttributes) {
+            mutable.extraAttributes = extra
+        }
+        return mutable
     }
 }

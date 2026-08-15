@@ -13,6 +13,7 @@ final class TabRouter {
             previousSelection = oldValue
         }
     }
+    var browsePath: [String] = []
     private(set) var previousSelection: RootTab?
     private var pendingSelection: RootTab?
     private var isSelectionUpdateScheduled = false
@@ -29,6 +30,11 @@ final class TabRouter {
                 self?.applyPendingSelection()
             }
         }
+    }
+
+    func openArtist(_ artist: String) {
+        browsePath = [artist]
+        select(.browse)
     }
 
     private func applyPendingSelection() {
@@ -66,7 +72,7 @@ struct RootTabView: View {
             .tabItem { Label("Playlist", systemImage: "music.note.list") }
             .tag(RootTab.playlist)
 
-            NavigationStack {
+            NavigationStack(path: $router.browsePath) {
                 BrowseView()
             }
             .tabItem { Label("Browse", systemImage: "square.grid.2x2.fill") }
