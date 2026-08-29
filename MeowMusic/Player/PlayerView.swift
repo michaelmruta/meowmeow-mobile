@@ -122,7 +122,10 @@ struct PlayerView: View {
             }
         }
         .onDisappear {
-            if showingLyrics { IdleTimerGuard.end() }
+            if showingLyrics {
+                IdleTimerGuard.end()
+                showingLyrics = false
+            }
         }
     }
 
