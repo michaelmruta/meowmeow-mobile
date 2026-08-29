@@ -23,8 +23,18 @@ final class LibraryStore {
     /// already had instead of a "Loading Library…" flash. `scan()` still
     /// verifies against the filesystem afterward and corrects `songs` if
     /// anything actually changed, but that happens silently in the background.
+    /// Artwork lives in the sidecar cache (see `CacheEntry`), not in this
+    /// JSON, so it has to be reattached here the same way `scan()` does —
+    /// otherwise every song in this seed snapshot has `artwork == nil` until
+    /// the first `scan()` completes, which made Shuffle Play (the default
+    /// tab's big play button, tappable before that scan finishes) start
+    /// playback with no album art.
     init() {
-        songs = Self.loadCache().values.map(\.song)
+        songs = Self.loadCache().map { relativePath, entry in
+            var song = entry.song
+            song.artwork = Self.loadArtwork(for: relativePath)
+            return song
+        }
     }
 
     static var documentsURL: URL {

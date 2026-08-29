@@ -114,6 +114,16 @@ struct PlayerView: View {
             }
             lyricsLines = await LyricsService.load(for: song)
         }
+        .onChange(of: showingLyrics) { _, isShowing in
+            if isShowing {
+                IdleTimerGuard.begin()
+            } else {
+                IdleTimerGuard.end()
+            }
+        }
+        .onDisappear {
+            if showingLyrics { IdleTimerGuard.end() }
+        }
     }
 
     private var placeholderPlayer: some View {
