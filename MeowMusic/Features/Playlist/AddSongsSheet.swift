@@ -24,7 +24,7 @@ struct AddSongsSheet: View {
         NavigationStack {
             List(filteredSongs) { song in
                 let alreadyIn = existingPaths.contains(song.id) || addedPaths.contains(song.id)
-                SongRow(song: song, isPlaying: false)
+                SongRow(song: song, isPlaying: false, showRating: false)
                     .contentShape(Rectangle())
                     .opacity(alreadyIn ? 0.4 : 1)
                     .overlay(alignment: .trailing) {

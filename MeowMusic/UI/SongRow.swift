@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import UIKit
 
 /// Shared song row used by Favorites, Playlist, and Browse. `isPlaying`
@@ -8,6 +9,22 @@ struct SongRow: View {
     var isPlaying: Bool
     var showArtist: Bool = true
     var showArtwork: Bool = true
+    var showRating: Bool = true
+
+    @Environment(\.modelContext) private var modelContext
+    @Query private var ratingRecords: [SongRatingRecord]
+
+    init(song: Song, isPlaying: Bool, showArtist: Bool = true, showArtwork: Bool = true, showRating: Bool = true) {
+        self.song = song
+        self.isPlaying = isPlaying
+        self.showArtist = showArtist
+        self.showArtwork = showArtwork
+        self.showRating = showRating
+        let songPath = song.id
+        _ratingRecords = Query(filter: #Predicate<SongRatingRecord> { $0.songPath == songPath })
+    }
+
+    private var rating: Int { ratingRecords.first?.rating ?? 0 }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -25,6 +42,9 @@ struct SongRow: View {
                         .foregroundStyle(isPlaying ? Theme.orange.opacity(0.8) : Theme.secondaryText)
                         .lineLimit(1)
                 }
+                if showRating {
+                    StarRatingView(rating: rating, onSet: setRating)
+                }
             }
             Spacer()
             if isPlaying {
@@ -34,6 +54,14 @@ struct SongRow: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    private func setRating(_ value: Int) {
+        if let existing = ratingRecords.first {
+            existing.rating = value
+        } else {
+            modelContext.insert(SongRatingRecord(songPath: song.id, rating: value))
+        }
     }
 
     @ViewBuilder
@@ -49,6 +77,29 @@ struct SongRow: View {
                 .fill(Theme.card)
                 .frame(width: 46, height: 46)
                 .overlay { EighthNotePairIcon().padding(10) }
+        }
+    }
+}
+
+/// Plain tap-to-set 1-5 stars. Deliberately "dumb": tapping star N sets the
+/// rating to N, no drag gesture, no tap-to-clear — matches every other
+/// lightweight control in the song list rows.
+struct StarRatingView: View {
+    var rating: Int
+    var onSet: (Int) -> Void
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(1...5, id: \.self) { star in
+                Button {
+                    onSet(star)
+                } label: {
+                    Image(systemName: star <= rating ? "star.fill" : "star")
+                        .font(.caption2)
+                        .foregroundStyle(star <= rating ? Theme.orange : Theme.tertiaryText)
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 }

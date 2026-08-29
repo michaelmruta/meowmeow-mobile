@@ -23,6 +23,7 @@
 		4803E83D392E8E34A735682B /* AddSongsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFDA761AC52BD87F10DFFEA1 /* AddSongsSheet.swift */; };
 		4BD2110671E448588A0A4754 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FF8CCEFE3691F560547CA5C1 /* Assets.xcassets */; };
 		4C2C688A1F5A1F8578C3707F /* MetadataWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11F7DD3E4659F15B1EB9C9 /* MetadataWriter.swift */; };
+		50DF48ACD1354DC6F57C9B96 /* HistorySidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 302F35608F1799FC7D2BFD0F /* HistorySidebarView.swift */; };
 		5344541FA79F3D10F6658169 /* GoogleDriveSyncController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A482D39F44547614C9CA8B5F /* GoogleDriveSyncController.swift */; };
 		547D2E3FA715153ACF9F6E06 /* WebDAVSyncController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F3FD047F31BF9B017893C0E /* WebDAVSyncController.swift */; };
 		5ACDB6848704F3010A660C2E /* Song.swift in Sources */ = {isa = PBXBuildFile; fileRef = B24628C5C240E28BDD3B27F1 /* Song.swift */; };
@@ -65,6 +66,7 @@
 		173F289BC6C33CB2FAC74468 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		2BB0E0CA99ACC5E4714AFB3F /* GoogleDriveSyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveSyncEngine.swift; sourceTree = "<group>"; };
 		2FA6540084FED9C069AE3307 /* EighthNotePairIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EighthNotePairIcon.swift; sourceTree = "<group>"; };
+		302F35608F1799FC7D2BFD0F /* HistorySidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistorySidebarView.swift; sourceTree = "<group>"; };
 		34A9610E974BCFEB71FDA38F /* FolderPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderPicker.swift; sourceTree = "<group>"; };
 		361F3990D8994BBE4B5D7DAB /* WebDAVSyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebDAVSyncEngine.swift; sourceTree = "<group>"; };
 		3F3FD047F31BF9B017893C0E /* WebDAVSyncController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebDAVSyncController.swift; sourceTree = "<group>"; };
@@ -224,6 +226,14 @@
 			path = MeowMusic;
 			sourceTree = "<group>";
 		};
+		8DB300AC08A04FE76A0F5AEB /* History */ = {
+			isa = PBXGroup;
+			children = (
+				302F35608F1799FC7D2BFD0F /* HistorySidebarView.swift */,
+			);
+			path = History;
+			sourceTree = "<group>";
+		};
 		8EAB1AE01495657F5771D413 /* Playlist */ = {
 			isa = PBXGroup;
 			children = (
@@ -247,6 +257,7 @@
 			children = (
 				B8F1E806A870DAA6FB420FAE /* Browse */,
 				F45EF2512F2D7810069BD21B /* Favorites */,
+				8DB300AC08A04FE76A0F5AEB /* History */,
 				8EAB1AE01495657F5771D413 /* Playlist */,
 				E51D3C588A6EA81EEC58BCC8 /* Sync */,
 			);
@@ -370,6 +381,7 @@
 				CCECAD5DFF61E2F4DDC66827 /* GoogleDriveClient.swift in Sources */,
 				5344541FA79F3D10F6658169 /* GoogleDriveSyncController.swift in Sources */,
 				9B862E84454A385FB5B4A4B3 /* GoogleDriveSyncEngine.swift in Sources */,
+				50DF48ACD1354DC6F57C9B96 /* HistorySidebarView.swift in Sources */,
 				761F5D92A324687F0A9235D0 /* IdleTimerGuard.swift in Sources */,
 				9DCDA397854B6EB84834DF4E /* KeychainStore.swift in Sources */,
 				10B3FBCD27B612982ADED3EF /* LibraryStore.swift in Sources */,

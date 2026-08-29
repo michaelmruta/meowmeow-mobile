@@ -16,7 +16,10 @@ struct MeowMusicApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     var modelContainer: ModelContainer = {
-        let schema = Schema([FavoriteRecord.self, PlaylistEntity.self, PlaylistSongEntity.self])
+        let schema = Schema([
+            FavoriteRecord.self, PlaylistEntity.self, PlaylistSongEntity.self,
+            PlayHistoryRecord.self, SongRatingRecord.self, SongPlayCountRecord.self
+        ])
         let config = ModelConfiguration(schema: schema, cloudKitDatabase: .none)
 
         do {
@@ -41,6 +44,7 @@ struct MeowMusicApp: App {
                 .environment(tabRouter)
                 .preferredColorScheme(.dark)
                 .task {
+                    player.modelContext = modelContainer.mainContext
                     configureGoogleSignIn()
                     await library.scan()
                     await googleDriveStore.restorePreviousSignIn()

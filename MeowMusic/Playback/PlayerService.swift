@@ -3,6 +3,7 @@ import AVFoundation
 import MediaPlayer
 import UIKit
 import Observation
+import SwiftData
 
 enum RepeatMode {
     case off, all, one
@@ -47,12 +48,23 @@ final class PlayerService {
     }
     var repeatMode: RepeatMode = .off
 
+    /// Set once by the app at launch. History/rating/play-count writes are
+    /// no-ops until this is available (there's a brief window at launch
+    /// before it's wired up, but no playback can start before then).
+    var modelContext: ModelContext?
+
     private let player = AVPlayer()
     private var itemStatusObservation: NSKeyValueObservation?
     private var endObserver: NSObjectProtocol?
     private var timeObserverToken: Any?
     private var shuffledOrder: [Int] = []
     private var playOrderPosition: Int = 0
+
+    /// A play only "counts" (increments `SongPlayCountRecord`) once the
+    /// current song has played past this fraction, so skipping through the
+    /// first few seconds of a track doesn't inflate its play count.
+    private let playCountThreshold: Double = 0.2
+    private var hasCountedPlayForCurrentSong = false
 
     init() {
         configureAudioSession()
@@ -88,7 +100,9 @@ final class PlayerService {
         currentSong = song
         currentTime = 0
         duration = 0
+        hasCountedPlayForCurrentSong = false
 
+        recordHistory(for: song)
         resume()
     }
 
@@ -257,6 +271,11 @@ final class PlayerService {
         if let itemDuration = player.currentItem?.duration.seconds, itemDuration.isFinite {
             duration = itemDuration
         }
+
+        guard !hasCountedPlayForCurrentSong, let song = currentSong,
+              duration > 0, currentTime >= duration * playCountThreshold else { return }
+        hasCountedPlayForCurrentSong = true
+        incrementPlayCount(for: song)
     }
 
     private func configureEndOfItemObserver() {
@@ -331,5 +350,33 @@ final class PlayerService {
     /// inheriting `PlayerService`'s main-actor isolation.
     private nonisolated static func makeNowPlayingArtwork(from image: UIImage) -> MPMediaItemArtwork {
         MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+    }
+
+    private func recordHistory(for song: Song) {
+        guard let modelContext else { return }
+        let songPath = song.id
+        let descriptor = FetchDescriptor<PlayHistoryRecord>(
+            predicate: #Predicate { $0.songPath == songPath }
+        )
+        if let existing = try? modelContext.fetch(descriptor).first {
+            existing.playedAt = .now
+        } else {
+            modelContext.insert(PlayHistoryRecord(songPath: songPath))
+        }
+        try? modelContext.save()
+    }
+
+    private func incrementPlayCount(for song: Song) {
+        guard let modelContext else { return }
+        let songPath = song.id
+        let descriptor = FetchDescriptor<SongPlayCountRecord>(
+            predicate: #Predicate { $0.songPath == songPath }
+        )
+        if let existing = try? modelContext.fetch(descriptor).first {
+            existing.playCount += 1
+        } else {
+            modelContext.insert(SongPlayCountRecord(songPath: songPath, playCount: 1))
+        }
+        try? modelContext.save()
     }
 }

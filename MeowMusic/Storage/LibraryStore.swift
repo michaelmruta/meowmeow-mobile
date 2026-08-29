@@ -24,7 +24,11 @@ final class LibraryStore {
     /// verifies against the filesystem afterward and corrects `songs` if
     /// anything actually changed, but that happens silently in the background.
     init() {
-        songs = Self.loadCache().values.map(\.song)
+        songs = Self.loadCache().map { relativePath, entry in
+            var song = entry.song
+            song.artwork = Self.loadArtwork(for: relativePath)
+            return song
+        }
     }
 
     static var documentsURL: URL {
