@@ -63,7 +63,19 @@ final class LibraryStore {
     func songs(forArtist artist: String) -> [Song] {
         songs
             .filter { $0.artist == artist }
-            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            .sorted { lhs, rhs in
+                // Sort by track number first (if available), then by natural title sort
+                switch (lhs.trackNumber, rhs.trackNumber) {
+                case let (l?, r?) where l != r:
+                    return l < r
+                case (nil, .some):
+                    return false
+                case (.some, nil):
+                    return true
+                default:
+                    return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
+                }
+            }
     }
 
     struct AlbumGroup: Identifiable {
@@ -76,7 +88,7 @@ final class LibraryStore {
     func albums(forArtist artist: String) -> [AlbumGroup] {
         let grouped = Dictionary(grouping: songs(forArtist: artist), by: \.album)
         return grouped.keys
-            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
             .map { album in
                 let albumSongs = grouped[album] ?? []
                 let art = albumSongs.first(where: { $0.artwork != nil })?.artwork

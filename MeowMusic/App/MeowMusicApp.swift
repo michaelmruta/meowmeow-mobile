@@ -16,7 +16,12 @@ struct MeowMusicApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     var modelContainer: ModelContainer = {
-        let schema = Schema([FavoriteRecord.self, PlaylistEntity.self, PlaylistSongEntity.self])
+        let schema = Schema([
+            FavoriteRecord.self,
+            PlaylistEntity.self,
+            PlaylistSongEntity.self,
+            RecentlyPlayedRecord.self
+        ])
         let config = ModelConfiguration(schema: schema, cloudKitDatabase: .none)
 
         do {

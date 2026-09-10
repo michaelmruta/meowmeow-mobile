@@ -107,11 +107,12 @@ struct PlayerView: View {
             MetadataEditorView()
         }
         .task(id: player.currentSong?.id) {
-            showingLyrics = false
             guard let song = player.currentSong else {
                 lyricsLines = []
+                showingLyrics = false
                 return
             }
+            // Load lyrics for the new song, keep showingLyrics state
             lyricsLines = await LyricsService.load(for: song)
         }
         .onChange(of: showingLyrics) { _, isShowing in

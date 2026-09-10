@@ -73,19 +73,47 @@ enum LyricsService {
     }
 
     /// Parses `[mm:ss.xx]lyric text` lines. A line may carry multiple time tags.
+    /// Also preserves blank lines without timestamps to maintain verse structure.
     static func parseLRC(_ content: String) -> [LyricLine] {
         var lines: [LyricLine] = []
         let tagPattern = #"\[(\d{2}):(\d{2})(?:\.(\d{1,3}))?\]"#
         guard let regex = try? NSRegularExpression(pattern: tagPattern) else { return [] }
-
-        for rawLine in content.components(separatedBy: .newlines) {
+        
+        let allLines = content.components(separatedBy: .newlines)
+        var hasAnyTimestamp = false
+        
+        // First pass: check if this is actually an LRC file (has at least one timestamp)
+        for rawLine in allLines {
             let fullRange = NSRange(rawLine.startIndex..., in: rawLine)
             let matches = regex.matches(in: rawLine, range: fullRange)
-            guard !matches.isEmpty else { continue }
+            if !matches.isEmpty {
+                hasAnyTimestamp = true
+                break
+            }
+        }
+        
+        // If no timestamps at all, this isn't an LRC file
+        guard hasAnyTimestamp else { return [] }
+
+        // Second pass: parse all lines, preserving blank lines
+        for rawLine in allLines {
+            let fullRange = NSRange(rawLine.startIndex..., in: rawLine)
+            let matches = regex.matches(in: rawLine, range: fullRange)
+            
+            // If line has no timestamp tags
+            if matches.isEmpty {
+                // Preserve blank lines (empty or whitespace-only)
+                let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
+                if trimmed.isEmpty {
+                    lines.append(LyricLine(time: nil, text: ""))
+                }
+                // Skip non-blank lines without timestamps (metadata like [ar:Artist])
+                continue
+            }
 
             let text = regex.stringByReplacingMatches(in: rawLine, range: fullRange, withTemplate: "")
                 .trimmingCharacters(in: .whitespaces)
-            guard !text.isEmpty else { continue }
+            // Allow empty text for blank lines with timestamps (preserves verse breaks)
 
             for match in matches {
                 guard let mmRange = Range(match.range(at: 1), in: rawLine),
@@ -99,7 +127,10 @@ enum LyricsService {
                 lines.append(LyricLine(time: time, text: text))
             }
         }
-        return lines.sorted { ($0.time ?? 0) < ($1.time ?? 0) }
+        
+        // Don't sort! Keep lines in the order they appeared in the file
+        // This preserves the structure with blank lines in their correct positions
+        return lines
     }
 
     static func plainLines(_ content: String) -> [LyricLine] {

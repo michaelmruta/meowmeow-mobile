@@ -3,6 +3,7 @@ import AVFoundation
 import MediaPlayer
 import UIKit
 import Observation
+import SwiftData
 
 enum RepeatMode {
     case off, all, one
@@ -20,7 +21,7 @@ enum PlaybackMode {
     case off, shuffle, repeatOne, repeatAll
 }
 
-/// App-wide playback engine. Owns the `AVPlayer` (single instance, item swapped
+/// App-canwide playback engine. Owns the `AVPlayer` (single instance, item swapped
 /// per song), the current queue (Favorites/Browse/Playlist all hand it a queue
 /// + starting song), shuffle and repeat state, and Control Center / lock-screen
 /// integration.
@@ -53,12 +54,21 @@ final class PlayerService {
     private var timeObserverToken: Any?
     private var shuffledOrder: [Int] = []
     private var playOrderPosition: Int = 0
+    
+    // Recently played tracking
+    private var modelContext: ModelContext?
+    private var songPlaybackStartTime: TimeInterval = 0
+    private var maxTimeReached: TimeInterval = 0
+    private var isPlayingFromRecentlyPlayed = false
 
     init() {
         configureAudioSession()
         configureRemoteCommands()
-        configureEndOfItemObserver()
         configureTimeObserver()
+    }
+    
+    func setModelContext(_ context: ModelContext) {
+        self.modelContext = context
     }
 
     private func configureAudioSession() {
@@ -71,9 +81,13 @@ final class PlayerService {
         }
     }
 
-    func play(song: Song, in newQueue: [Song]) {
+    func play(song: Song, in newQueue: [Song], isRecentlyPlayed: Bool = false) {
+        // Save the previous song's playback before switching
+        recordPlaybackIfQualified()
+        
         queue = newQueue
         queueIndex = newQueue.firstIndex(of: song) ?? 0
+        isPlayingFromRecentlyPlayed = isRecentlyPlayed
         if shuffle {
             rebuildShuffleOrder(startingAt: queueIndex)
         }
@@ -81,24 +95,51 @@ final class PlayerService {
     }
 
     private func startPlayback(song: Song) {
+        if let oldItem = player.currentItem {
+            NotificationCenter.default.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: oldItem)
+        }
+        
         let item = AVPlayerItem(url: song.fileURL)
         observeStatus(of: item)
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(playerItemDidFinishPlaying),
+            name: .AVPlayerItemDidPlayToEndTime,
+            object: item
+        )
+        
         player.replaceCurrentItem(with: item)
 
         currentSong = song
         currentTime = 0
         duration = 0
-
-        resume()
+        songPlaybackStartTime = 0
+        maxTimeReached = 0
+        isPlaying = true
+        updateNowPlayingInfo()
+    }
+    
+    @objc private func playerItemDidFinishPlaying(notification: NSNotification) {
+        Task { @MainActor in
+            self.handlePlaybackFinished()
+        }
     }
 
     private func observeStatus(of item: AVPlayerItem) {
         itemStatusObservation?.invalidate()
         itemStatusObservation = item.observe(\.status, options: [.new]) { observedItem, _ in
-            guard observedItem.status == .failed else { return }
-            let message = observedItem.error?.localizedDescription ?? "unknown error"
             Task { @MainActor in
-                print("MeowMusic: playback error \(message)")
+                switch observedItem.status {
+                case .failed:
+                    self.advance(forward: true, userInitiated: false)
+                case .readyToPlay:
+                    self.player.play()
+                case .unknown:
+                    break
+                @unknown default:
+                    break
+                }
             }
         }
     }
@@ -208,6 +249,8 @@ final class PlayerService {
 
     private func advance(forward: Bool, userInitiated: Bool) {
         guard !queue.isEmpty else { return }
+        
+        recordPlaybackIfQualified()
 
         if shuffle {
             var position = playOrderPosition + (forward ? 1 : -1)
@@ -257,19 +300,9 @@ final class PlayerService {
         if let itemDuration = player.currentItem?.duration.seconds, itemDuration.isFinite {
             duration = itemDuration
         }
-    }
-
-    private func configureEndOfItemObserver() {
-        endObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: nil,
-            queue: .main
-        ) { [weak self] note in
-            let endedItem = note.object as? AVPlayerItem
-            Task { @MainActor in
-                guard let self, let endedItem, endedItem === self.player.currentItem else { return }
-                self.handlePlaybackFinished()
-            }
+        
+        if currentTime > maxTimeReached {
+            maxTimeReached = currentTime
         }
     }
 
@@ -331,5 +364,49 @@ final class PlayerService {
     /// inheriting `PlayerService`'s main-actor isolation.
     private nonisolated static func makeNowPlayingArtwork(from image: UIImage) -> MPMediaItemArtwork {
         MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+    }
+    
+    // MARK: - Recently Played Tracking
+    
+    /// Records the current song to Recently Played if:
+    /// 1. At least 33% of the song was played
+    /// 2. Not currently playing from the Recently Played playlist
+    private func recordPlaybackIfQualified() {
+        guard let song = currentSong,
+              let context = modelContext,
+              !isPlayingFromRecentlyPlayed,
+              duration > 0 else { return }
+        
+        let playedPercentage = maxTimeReached / duration
+        guard playedPercentage >= 0.33 else { return }
+        
+        // Check if record already exists
+        let songPath = song.id
+        let fetchDescriptor = FetchDescriptor<RecentlyPlayedRecord>(
+            predicate: #Predicate { $0.songPath == songPath }
+        )
+        
+        if let existing = try? context.fetch(fetchDescriptor).first {
+            // Update the timestamp to move it to the top
+            existing.lastPlayedDate = .now
+        } else {
+            // Add new record
+            let record = RecentlyPlayedRecord(songPath: songPath)
+            context.insert(record)
+        }
+        
+        // Keep only the last 200 songs
+        let allFetchDescriptor = FetchDescriptor<RecentlyPlayedRecord>(
+            sortBy: [SortDescriptor(\.lastPlayedDate, order: .reverse)]
+        )
+        
+        if let allRecords = try? context.fetch(allFetchDescriptor), allRecords.count > 200 {
+            // Delete oldest records beyond 200
+            for i in 200..<allRecords.count {
+                context.delete(allRecords[i])
+            }
+        }
+        
+        try? context.save()
     }
 }

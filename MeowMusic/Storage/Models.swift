@@ -14,6 +14,19 @@ final class FavoriteRecord {
     }
 }
 
+/// Tracks recently played songs (up to 200). Last played appears at the top.
+/// A song is only added if at least 33% of its duration was played.
+@Model
+final class RecentlyPlayedRecord {
+    @Attribute(.unique) var songPath: String
+    var lastPlayedDate: Date
+
+    init(songPath: String, lastPlayedDate: Date = .now) {
+        self.songPath = songPath
+        self.lastPlayedDate = lastPlayedDate
+    }
+}
+
 @Model
 final class PlaylistEntity {
     @Attribute(.unique) var id: UUID

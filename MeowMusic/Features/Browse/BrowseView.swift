@@ -15,7 +15,7 @@ struct BrowseView: View {
         guard !searchText.isEmpty else { return [] }
         return library.songs
             .filter { matches($0) }
-            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
     }
 
     private func matches(_ song: Song) -> Bool {

@@ -36,8 +36,8 @@ targets:
       path: MeowMusic/Resources/Info.plist
       properties:
         CFBundleDisplayName: Meow Music
-        CFBundleShortVersionString: "1.0"
-        CFBundleVersion: "5"
+        CFBundleShortVersionString: "1.1"
+        CFBundleVersion: "6"
         CFBundleURLTypes:
           - CFBundleTypeRole: Editor
             CFBundleURLSchemes:

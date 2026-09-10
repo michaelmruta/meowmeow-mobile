@@ -166,19 +166,23 @@ struct MetadataEditorView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding()
                 } else {
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(displayLyricLines) { line in
-                            HStack(alignment: .top, spacing: 10) {
-                                if let time = line.time {
-                                    Text(formattedDuration(time))
-                                        .font(.caption.monospacedDigit())
-                                        .foregroundStyle(Theme.tertiaryText)
-                                        .frame(width: 44, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(displayLyricLines.enumerated()), id: \.offset) { index, line in
+                            // Skip rendering blank lines - their spacing is added to the previous line
+                            if !line.text.isEmpty {
+                                HStack(alignment: .top, spacing: 10) {
+                                    if let time = line.time {
+                                        Text(formattedDuration(time))
+                                            .font(.caption.monospacedDigit())
+                                            .foregroundStyle(Theme.tertiaryText)
+                                            .frame(width: 44, alignment: .leading)
+                                    }
+                                    Text(line.text)
+                                        .font(.subheadline)
+                                        .foregroundStyle(Theme.secondaryText)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
                                 }
-                                Text(line.text.isEmpty ? " " : line.text)
-                                    .font(.subheadline)
-                                    .foregroundStyle(Theme.secondaryText)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.bottom, editorLineSpacing(at: index, in: displayLyricLines))
                             }
                         }
                     }
@@ -293,5 +297,28 @@ struct MetadataEditorView: View {
     private func formattedBitrate(_ bitrateKbps: Int?) -> String {
         guard let bitrateKbps, bitrateKbps > 0 else { return "Unknown" }
         return "\(bitrateKbps) kbps"
+    }
+
+    private func editorLineSpacing(at index: Int, in lines: [LyricLine]) -> CGFloat {
+        let currentLine = lines[index]
+        
+        // If this is the last line, no spacing needed
+        guard index < lines.count - 1 else { return 0 }
+        
+        // Don't add spacing to blank lines (they're not rendered)
+        if currentLine.text.isEmpty {
+            return 0
+        }
+        
+        // Check if next line(s) are blank - add extra spacing for each blank line
+        var spacing: CGFloat = 8  // Normal spacing
+        var nextIndex = index + 1
+        
+        while nextIndex < lines.count && lines[nextIndex].text.isEmpty {
+            spacing += 16  // Add spacing for each blank line (smaller in editor)
+            nextIndex += 1
+        }
+        
+        return spacing
     }
 }

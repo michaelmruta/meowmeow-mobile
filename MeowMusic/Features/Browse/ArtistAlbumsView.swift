@@ -14,8 +14,21 @@ struct ArtistAlbumsView: View {
     private var displayedSongs: [Song] {
         let songs = library.songs(forArtist: artist)
         guard let selectedAlbum else {
-            return songs.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            // When browsing all artist songs: sort by track number first, then natural title sort
+            return songs.sorted { lhs, rhs in
+                switch (lhs.trackNumber, rhs.trackNumber) {
+                case let (l?, r?) where l != r:
+                    return l < r
+                case (nil, .some):
+                    return false
+                case (.some, nil):
+                    return true
+                default:
+                    return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
+                }
+            }
         }
+        // When viewing a specific album: sort by track number, then natural title sort
         return songs
             .filter { $0.album == selectedAlbum }
             .sorted { lhs, rhs in
@@ -27,7 +40,7 @@ struct ArtistAlbumsView: View {
                 case (.some, nil):
                     return true
                 default:
-                    return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+                    return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
                 }
             }
     }

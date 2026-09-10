@@ -105,6 +105,14 @@ enum WebDAVClient {
         guard let http = response as? HTTPURLResponse else { throw WebDAVError.invalidResponse }
         guard (200...299).contains(http.statusCode) else { throw WebDAVError.http(http.statusCode) }
 
+        // Validate the downloaded file
+        let fileAttributes = try FileManager.default.attributesOfItem(atPath: tempURL.path)
+        let downloadedSize = (fileAttributes[.size] as? Int64) ?? 0
+        
+        guard downloadedSize > 0 else {
+            throw WebDAVError.invalidResponse
+        }
+
         let fm = FileManager.default
         try? fm.removeItem(at: destinationURL)
         try fm.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)

@@ -17,6 +17,7 @@ final class TabRouter {
     private(set) var previousSelection: RootTab?
     private var pendingSelection: RootTab?
     private var isSelectionUpdateScheduled = false
+    var showRecentlyPlayed = false
 
     func select(_ tab: RootTab) {
         guard tab != selection else { return }
@@ -53,9 +54,38 @@ struct RootTabView: View {
 
     var body: some View {
         @Bindable var router = router
-        TabView(selection: $router.selection) {
+        TabView(selection: Binding(
+            get: { router.selection },
+            set: { newValue in
+                // If tapping the same tab, toggle Recently Played
+                if newValue == .nowPlaying && router.selection == .nowPlaying {
+                    router.showRecentlyPlayed.toggle()
+                } else {
+                    // Switching to a different tab
+                    if newValue != .nowPlaying {
+                        router.showRecentlyPlayed = false
+                    }
+                    router.selection = newValue
+                }
+            }
+        )) {
             NavigationStack {
-                PlayerView()
+                Group {
+                    if router.showRecentlyPlayed {
+                        RecentlyPlayedView()
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .leading).combined(with: .opacity)
+                            ))
+                    } else {
+                        PlayerView()
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .leading).combined(with: .opacity),
+                                removal: .move(edge: .trailing).combined(with: .opacity)
+                            ))
+                    }
+                }
+                .animation(.easeInOut(duration: 0.3), value: router.showRecentlyPlayed)
             }
             .tabItem { Label("Now Playing", systemImage: "play.circle.fill") }
             .tag(RootTab.nowPlaying)
