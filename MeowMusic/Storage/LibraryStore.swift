@@ -3,13 +3,18 @@ import AVFoundation
 import AudioToolbox
 import Observation
 
-/// Scans Documents/Downloads/<Artist>/<file> and keeps an in-memory library.
+/// Scans <base>/Downloads/<Artist>/<file> and keeps an in-memory library.
 /// The filesystem (managed by the user via Finder, or mirrored in by Sync) is
 /// the source of truth for which songs exist; SwiftData only stores
-/// favorites/playlists on top of it. Storage is always the app's local,
-/// on-device Documents directory — deliberately not iCloud, since that
-/// container's availability is resolved asynchronously and can differ
-/// between launches, which made the library appear to go empty at random.
+/// favorites/playlists on top of it. `<base>` is the app's local Documents
+/// directory by default, or the iCloud container's Documents folder when the
+/// user opts into iCloud storage (see `LibraryStorageState`).
+///
+/// The iCloud container resolves asynchronously and can be briefly nil at
+/// launch — earlier that made the library "go empty at random" because a scan
+/// ran against the wrong base before it was ready. `scan()` now refuses to run
+/// while the storage location is unresolved (`LibraryStorageState.isBlocked`),
+/// so the seeded/cached library stays on screen until iCloud is available.
 @MainActor
 @Observable
 final class LibraryStore {
@@ -37,8 +42,14 @@ final class LibraryStore {
         }
     }
 
+    /// The base directory the library lives under: the app's local Documents
+    /// folder, or `<iCloud container>/Documents` when the user has switched on
+    /// iCloud storage. Song ids are computed relative to this base, and the
+    /// same `Downloads/...` layout sits under it in both cases, so ids (and the
+    /// favorites/playlists keyed on them) stay stable across the move. See
+    /// `LibraryStorageState`.
     static var documentsURL: URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        LibraryStorageState.shared.libraryBaseURL
     }
 
     static var downloadsURL: URL {
@@ -98,6 +109,16 @@ final class LibraryStore {
 
     func song(withID id: String) -> Song? {
         songs.first { $0.id == id }
+    }
+
+    /// Resolves a list of stable ids (e.g. `FavoriteRecord.songPath`,
+    /// `PlaylistSongEntity.songPath`) to songs, preserving order and dropping
+    /// any id that no longer matches a file on disk. Shared by CarPlay's
+    /// Favorites/Playlists/Recently Played tabs, which fetch SwiftData
+    /// directly (no `@Query`) and need the same id -> Song mapping the
+    /// phone's views do inline (see FavoritesView.orderedFavoriteSongs).
+    func songs(forIDs ids: [String]) -> [Song] {
+        ids.compactMap(song(withID:))
     }
 
     /// Removes the underlying file from Downloads and drops the song from
@@ -190,17 +211,28 @@ final class LibraryStore {
     }
 
     func scan() async {
+        // When iCloud storage is wanted but its container hasn't resolved yet,
+        // the real library location is unknown. Scanning now would walk the
+        // local (possibly migrated-away) folder and wipe `songs`; skip until
+        // the container is ready. The cached/seeded library stays on screen.
+        if LibraryStorageState.shared.isBlocked { return }
+
         ensureDirectories()
         isScanning = true
         defer { isScanning = false }
 
         let root = Self.downloadsURL
         let documentsRoot = Self.documentsURL
+        let usingICloud = LibraryStorageState.shared.wantsICloud
 
         // The stat walk, cache comparison, artwork sidecar reads, and any
         // AVFoundation metadata loads all happen off the main actor, so a
         // scan — even one that finds real changes — never blocks the UI.
         songs = await Task.detached(priority: .utility) {
+            // In iCloud mode, ask the system to pull down any files that live
+            // only in the cloud (e.g. added on another device) so they become
+            // playable; they'll appear on a subsequent scan once materialized.
+            if usingICloud { Self.requestDownloadsForCloudOnlyItems(in: root) }
             let scannedFiles = Self.collectScannedFiles(in: root)
             let cache = Self.loadCache()
 
@@ -278,6 +310,24 @@ final class LibraryStore {
         let url: URL
         let size: Int
         let modDate: Date
+    }
+
+    /// Walks `root` including hidden entries to find iCloud placeholder files
+    /// (`.<name>.icloud`) — the stand-ins iOS leaves for items that live only
+    /// in the cloud — and asks the system to download each. Best-effort and
+    /// non-blocking: `startDownloadingUbiquitousItem` just schedules the pull,
+    /// and the real file shows up on a later scan once it lands.
+    nonisolated private static func requestDownloadsForCloudOnlyItems(in root: URL) {
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(at: root, includingPropertiesForKeys: nil) else { return }
+        for case let url as URL in enumerator {
+            guard url.pathExtension == "icloud" else { continue }
+            var name = url.lastPathComponent
+            if name.hasPrefix(".") { name.removeFirst() }
+            if name.hasSuffix(".icloud") { name.removeLast(".icloud".count) }
+            let realURL = url.deletingLastPathComponent().appendingPathComponent(name)
+            try? fm.startDownloadingUbiquitousItem(at: realURL)
+        }
     }
 
     nonisolated private static func collectScannedFiles(in root: URL) -> [ScannedFile] {

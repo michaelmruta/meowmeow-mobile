@@ -11,14 +11,23 @@ import GoogleSignIn
 @MainActor
 @Observable
 final class GoogleDriveAccountStore {
-    /// Read-only scope: this app only ever downloads from Drive, never
-    /// writes back, so the least-privilege scope is sufficient.
-    private static let driveScope = "https://www.googleapis.com/auth/drive.readonly"
+    /// Per-file scope: the app only ever sees folders the user explicitly
+    /// grants through the Google Picker (and files it created). Unlike the
+    /// broad `drive.readonly`, this is a non-restricted scope, so it doesn't
+    /// require Google's paid CASA security assessment to ship publicly.
+    private static let driveScope = "https://www.googleapis.com/auth/drive.file"
 
-    private let folderKey = "googledrive.folderID"
+    private let folderIDKey = "googledrive.folderID"
+    private let folderNameKey = "googledrive.folderName"
 
-    var folderIDInput: String {
-        didSet { UserDefaults.standard.set(folderIDInput, forKey: folderKey) }
+    /// The folder the user picked via the Google Picker. Under `drive.file`
+    /// there is no free-text folder entry — access is only ever granted by
+    /// selecting a folder in Google's own UI.
+    private(set) var selectedFolderID: String {
+        didSet { UserDefaults.standard.set(selectedFolderID, forKey: folderIDKey) }
+    }
+    private(set) var selectedFolderName: String {
+        didSet { UserDefaults.standard.set(selectedFolderName, forKey: folderNameKey) }
     }
 
     private(set) var currentUserEmail: String?
@@ -28,7 +37,8 @@ final class GoogleDriveAccountStore {
     private(set) var connectionError: String?
 
     init() {
-        folderIDInput = UserDefaults.standard.string(forKey: folderKey) ?? ""
+        selectedFolderID = UserDefaults.standard.string(forKey: folderIDKey) ?? ""
+        selectedFolderName = UserDefaults.standard.string(forKey: folderNameKey) ?? ""
         currentUserEmail = GIDSignIn.sharedInstance.currentUser?.profile?.email
     }
 
@@ -70,20 +80,55 @@ final class GoogleDriveAccountStore {
         currentUserEmail = nil
         isConnected = false
         connectionError = nil
+        // The folder grant is tied to the account and scope, so drop it when
+        // signing out — a fresh sign-in must pick a folder again.
+        selectedFolderID = ""
+        selectedFolderName = ""
     }
 
-    /// The Drive folder to sync from: accepts a raw folder ID, a full
-    /// `.../folders/<id>` share link, or blank (Drive's `root` alias for the
-    /// signed-in user's My Drive root).
-    var resolvedFolderID: String {
-        let trimmed = folderIDInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "root" }
+    /// Records the folder the user chose in the Google Picker. Selecting it is
+    /// what grants the `drive.file`-scoped app access to that folder's contents.
+    func setPickedFolder(_ folder: GoogleDrivePickedFolder) {
+        selectedFolderID = folder.id
+        selectedFolderName = folder.name
+        isConnected = false
+        connectionError = nil
+    }
 
-        if let range = trimmed.range(of: "/folders/") {
-            let id = trimmed[range.upperBound...].prefix { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" }
-            if !id.isEmpty { return String(id) }
+    var hasSelectedFolder: Bool { !selectedFolderID.isEmpty }
+
+    /// Surfaces a picker/folder problem in the same place as connection errors.
+    func reportFolderError(_ message: String) {
+        connectionError = message
+        isConnected = false
+    }
+
+    /// The Drive folder to sync from — the id captured from the Picker. Empty
+    /// until the user picks one; sync/test guard against that.
+    var resolvedFolderID: String { selectedFolderID }
+
+    /// Assembles what `GoogleDrivePickerView` needs: a fresh access token plus
+    /// the browser API key and project number read from `GoogleService-Info`.
+    /// Throws a readable error if the app hasn't been configured with a Picker
+    /// API key yet.
+    func pickerConfig() async throws -> GoogleDrivePickerConfig {
+        let credentials = try await credentials()
+
+        guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+              let plist = NSDictionary(contentsOfFile: path) else {
+            throw GoogleDriveError.pickerNotConfigured
         }
-        return trimmed
+        guard let apiKey = (plist["API_KEY"] as? String), !apiKey.isEmpty else {
+            throw GoogleDriveError.pickerNotConfigured
+        }
+        // The project number that the Picker wants as its "app ID" is the
+        // leading numeric segment of the OAuth client ID.
+        guard let clientID = plist["CLIENT_ID"] as? String,
+              let appId = clientID.split(separator: "-").first.map(String.init) else {
+            throw GoogleDriveError.pickerNotConfigured
+        }
+
+        return GoogleDrivePickerConfig(accessToken: credentials.accessToken, apiKey: apiKey, appId: appId)
     }
 
     /// Fetches a fresh access token, silently refreshing it if it's expired,
@@ -112,6 +157,11 @@ final class GoogleDriveAccountStore {
     func testConnection() async {
         guard isConfigured else {
             connectionError = "Sign in with Google to continue."
+            isConnected = false
+            return
+        }
+        guard hasSelectedFolder else {
+            connectionError = "Choose a Drive folder to sync from."
             isConnected = false
             return
         }

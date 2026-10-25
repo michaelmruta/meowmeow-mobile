@@ -13,6 +13,7 @@ struct GoogleDriveEntry: Sendable {
 
 enum GoogleDriveError: LocalizedError {
     case notSignedIn
+    case pickerNotConfigured
     case invalidResponse
     case http(Int)
 
@@ -20,6 +21,8 @@ enum GoogleDriveError: LocalizedError {
         switch self {
         case .notSignedIn:
             return "Sign in with Google to continue."
+        case .pickerNotConfigured:
+            return "Google Drive folder picking isn't configured. Add a Picker API key to GoogleService-Info.plist."
         case .invalidResponse:
             return "Google Drive sent an unexpected response."
         case .http(401), .http(403):

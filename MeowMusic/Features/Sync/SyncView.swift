@@ -24,6 +24,8 @@ struct SyncView: View {
             .padding()
             .background(Theme.background)
 
+            ICloudStorageToggle()
+
             switch source {
             case .local:
                 LocalStorageSyncView()
@@ -47,6 +49,71 @@ struct SyncView: View {
         }
         .sheet(isPresented: $isShowingAbout) {
             AboutView()
+        }
+    }
+}
+
+/// A library-wide toggle (shown above the per-source sync UI) letting the user
+/// choose whether their music is stored only on this device or in their iCloud
+/// storage and synced across their devices. Flipping it migrates the existing
+/// library; `ICloudStorageStore` owns that work and reports progress/errors.
+private struct ICloudStorageToggle: View {
+    @Environment(ICloudStorageStore.self) private var store
+    @Environment(LibraryStore.self) private var library
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle(isOn: Binding(
+                get: { store.isEnabled },
+                set: { newValue in Task { await store.setEnabled(newValue, library: library) } }
+            )) {
+                HStack(spacing: 8) {
+                    Image(systemName: "icloud.fill")
+                        .foregroundStyle(Theme.orange)
+                    Text("Store Music in iCloud")
+                        .foregroundStyle(Theme.primaryText)
+                }
+            }
+            .tint(Theme.orange)
+            .disabled(store.isBusy)
+
+            HStack(spacing: 6) {
+                if store.isBusy {
+                    ProgressView()
+                        .tint(Theme.orange)
+                        .controlSize(.small)
+                }
+                Text(statusText)
+                    .font(.caption)
+                    .foregroundStyle(statusColor)
+            }
+        }
+        .padding(12)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
+        .padding(.bottom, 8)
+    }
+
+    private var statusText: String {
+        if store.isBusy { return "Moving your library…" }
+        switch store.status {
+        case .local:
+            return "Music is stored on this device only."
+        case .working:
+            return "Preparing iCloud…"
+        case .active:
+            return "Music is stored in iCloud and synced across your devices."
+        case .unavailable(let message):
+            return message
+        }
+    }
+
+    private var statusColor: Color {
+        switch store.status {
+        case .unavailable:
+            return .red
+        default:
+            return Theme.secondaryText
         }
     }
 }
@@ -301,6 +368,8 @@ private struct GoogleDriveSyncView: View {
     @Environment(GoogleDriveAccountStore.self) private var account
     @Environment(LibraryStore.self) private var library
     @Environment(GoogleDriveSyncController.self) private var syncController
+    @State private var pickerConfig: GoogleDrivePickerConfig?
+    @State private var isPreparingPicker = false
 
     var body: some View {
         @Bindable var account = account
@@ -324,16 +393,25 @@ private struct GoogleDriveSyncView: View {
                             .foregroundStyle(Theme.orange)
                     }
                 }
-                LabeledContent("Folder") {
-                    TextField("Drive root (optional)", text: $account.folderIDInput)
-                        .multilineTextAlignment(.trailing)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                HStack {
+                    Image(systemName: "folder.fill")
+                        .foregroundStyle(Theme.orange)
+                    Text(account.hasSelectedFolder ? account.selectedFolderName : "No Folder Chosen")
+                        .foregroundStyle(account.hasSelectedFolder ? Theme.primaryText : Theme.secondaryText)
+                        .lineLimit(1)
+                    Spacer()
+                    if isPreparingPicker {
+                        ProgressView().tint(Theme.orange)
+                    } else {
+                        Button(account.hasSelectedFolder ? "Change…" : "Choose…") { presentPicker() }
+                            .foregroundStyle(account.isConfigured ? Theme.orange : Theme.tertiaryText)
+                            .disabled(!account.isConfigured)
+                    }
                 }
             } header: {
                 Text("Google Drive")
             } footer: {
-                Text("Paste a Drive folder link or ID, or leave blank to sync from the root of My Drive. Credentials are managed by Google Sign-In.")
+                Text("Sign in, then choose a folder from your Drive to sync. The app can only see the folder you pick here. Credentials are managed by Google Sign-In.")
             }
             .listRowBackground(Theme.card)
 
@@ -411,6 +489,21 @@ private struct GoogleDriveSyncView: View {
         }
         .scrollContentBackground(.hidden)
         .background(Theme.background)
+        .sheet(item: $pickerConfig) { config in
+            GoogleDrivePickerView(
+                config: config,
+                onPick: { folder in
+                    account.setPickedFolder(folder)
+                    pickerConfig = nil
+                },
+                onCancel: { pickerConfig = nil },
+                onError: { message in
+                    account.reportFolderError(message)
+                    pickerConfig = nil
+                }
+            )
+            .ignoresSafeArea()
+        }
     }
 
     private var connectionStatusText: String {
@@ -420,12 +513,24 @@ private struct GoogleDriveSyncView: View {
     }
 
     private var canSync: Bool {
-        account.isConfigured && !syncController.isSyncing
+        account.isConfigured && account.hasSelectedFolder && !syncController.isSyncing
     }
 
     private func signIn() {
         guard let rootVC = UIApplication.shared.foregroundRootViewController else { return }
         Task { await account.signIn(presenting: rootVC) }
+    }
+
+    private func presentPicker() {
+        isPreparingPicker = true
+        Task {
+            defer { isPreparingPicker = false }
+            do {
+                pickerConfig = try await account.pickerConfig()
+            } catch {
+                account.reportFolderError(error.localizedDescription)
+            }
+        }
     }
 
     private func performSync() {
