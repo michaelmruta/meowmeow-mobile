@@ -4,8 +4,13 @@ import GoogleSignIn
 
 @main
 struct MeowMusicApp: App {
-    @State private var library = LibraryStore()
-    @State private var player = PlayerService()
+    // `library`, `player`, `iCloudStore`, and `modelContainer` live in
+    // `AppEnvironment.shared` instead of here, so the CarPlay scene (a
+    // separate UIScene with no access to this struct) can drive the exact
+    // same instances. See AppEnvironment.swift.
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    private let env = AppEnvironment.shared
+
     @State private var syncStore = SyncBookmarkStore()
     @State private var webDAVStore = WebDAVAccountStore()
     @State private var googleDriveStore = GoogleDriveAccountStore()
@@ -15,31 +20,15 @@ struct MeowMusicApp: App {
     @State private var tabRouter = TabRouter()
     @Environment(\.scenePhase) private var scenePhase
 
-    var modelContainer: ModelContainer = {
-        let schema = Schema([
-            FavoriteRecord.self,
-            PlaylistEntity.self,
-            PlaylistSongEntity.self,
-            RecentlyPlayedRecord.self
-        ])
-        let config = ModelConfiguration(schema: schema, cloudKitDatabase: .none)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [config])
-        } catch {
-            let fallbackConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
-            return try! ModelContainer(for: schema, configurations: [fallbackConfig])
-        }
-    }()
-
     var body: some Scene {
         WindowGroup {
             RootContainerView()
-                .environment(library)
-                .environment(player)
+                .environment(env.library)
+                .environment(env.player)
                 .environment(syncStore)
                 .environment(webDAVStore)
                 .environment(googleDriveStore)
+                .environment(env.iCloudStore)
                 .environment(localSyncController)
                 .environment(webDAVSyncController)
                 .environment(googleDriveSyncController)
@@ -47,7 +36,9 @@ struct MeowMusicApp: App {
                 .preferredColorScheme(.dark)
                 .task {
                     configureGoogleSignIn()
-                    await library.scan()
+                    // Resolves iCloud + runs the first scan exactly once,
+                    // whichever scene (this one or CarPlay) connects first.
+                    await env.bootstrapIfNeeded()
                     await googleDriveStore.restorePreviousSignIn()
 #if DEBUG
                     configureScreenshotModeIfNeeded()
@@ -56,7 +47,11 @@ struct MeowMusicApp: App {
                 .onChange(of: scenePhase) { _, newPhase in
                     if newPhase == .active {
                         Task {
-                            await library.scan()
+                            // Re-resolve iCloud first so a container that was
+                            // unavailable at launch (not signed in yet) recovers
+                            // on foreground before the scan reads storage.
+                            await env.iCloudStore.resolveIfNeeded()
+                            await env.library.scan()
                         }
                         syncStore.refreshReachability()
                     }
@@ -65,7 +60,7 @@ struct MeowMusicApp: App {
                     _ = GIDSignIn.sharedInstance.handle(url)
                 }
         }
-        .modelContainer(modelContainer)
+        .modelContainer(env.modelContainer)
     }
 
     /// Loads the OAuth client ID from `GoogleService-Info.plist` and
@@ -89,8 +84,8 @@ struct MeowMusicApp: App {
 
         switch arguments[flagIndex + 1] {
         case "player":
-            guard let firstSong = library.songs.first else { return }
-            player.play(song: firstSong, in: library.songs)
+            guard let firstSong = env.library.songs.first else { return }
+            env.player.play(song: firstSong, in: env.library.songs)
             tabRouter.selection = .nowPlaying
         case "browse":
             tabRouter.selection = .browse

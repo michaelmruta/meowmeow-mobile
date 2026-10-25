@@ -6,6 +6,7 @@ struct ArtistAlbumsView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(PlayerService.self) private var player
     @Environment(TabRouter.self) private var tabRouter
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var selectedAlbum: String?
 
     private var albums: [LibraryStore.AlbumGroup] { library.albums(forArtist: artist) }
@@ -48,19 +49,7 @@ struct ArtistAlbumsView: View {
     var body: some View {
         VStack(spacing: 0) {
             if hasAnyArtwork {
-                GeometryReader { proxy in
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 16) {
-                            ForEach(albums) { group in
-                                albumThumbnail(group)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .frame(minWidth: proxy.size.width, alignment: .leading)
-                    }
-                }
-                .frame(height: 140)
-                .padding(.vertical, 8)
+                albumSection
             }
 
             List(displayedSongs) { song in
@@ -92,6 +81,38 @@ struct ArtistAlbumsView: View {
             player.pause()
         }
         library.delete(song)
+    }
+
+    /// On iPhone this is the original single-row horizontal scroll strip.
+    /// On iPad (regular width) it becomes a multi-row grid instead, so the
+    /// album art fills the wider detail pane rather than leaving it sparse.
+    @ViewBuilder
+    private var albumSection: some View {
+        if horizontalSizeClass == .regular {
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 110, maximum: 160), spacing: 16)], spacing: 16) {
+                    ForEach(albums) { group in
+                        albumThumbnail(group)
+                    }
+                }
+                .padding(16)
+            }
+            .frame(maxHeight: 280)
+        } else {
+            GeometryReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 16) {
+                        ForEach(albums) { group in
+                            albumThumbnail(group)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(minWidth: proxy.size.width, alignment: .leading)
+                }
+            }
+            .frame(height: 140)
+            .padding(.vertical, 8)
+        }
     }
 
     @ViewBuilder

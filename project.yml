@@ -12,7 +12,7 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: TTAWM56998
-    TARGETED_DEVICE_FAMILY: "1"
+    TARGETED_DEVICE_FAMILY: "1,2"
     GENERATE_INFOPLIST_FILE: NO
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
@@ -44,10 +44,26 @@ targets:
               - com.googleusercontent.apps.1041730774018-4ao6k3oo7hcf3vm2ju1qh7ul13c6o6rv
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
+        NSUbiquitousContainers:
+          iCloud.com.michaelruta.MeowMusic:
+            NSUbiquitousContainerIsDocumentScopePublic: true
+            NSUbiquitousContainerName: Meow Music
+            NSUbiquitousContainerSupportedFolderLevels: Any
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         UIBackgroundModes:
           - audio
+        # Declares only the CarPlay scene role — deliberately no
+        # UIWindowSceneSessionRoleApplication entry, so SwiftUI keeps
+        # managing the phone's WindowGroup scene automatically. See
+        # MeowMusic/App/AppDelegate.swift and MeowMusic/CarPlay/CarPlaySceneDelegate.swift.
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations:
+            CPTemplateApplicationSceneSessionRoleApplication:
+              - UISceneConfigurationName: CarPlay
+                UISceneClassName: CPTemplateApplicationScene
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarPlaySceneDelegate
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         "UISupportedInterfaceOrientations~ipad":
@@ -63,10 +79,12 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.michaelruta.MeowMusic
         PRODUCT_NAME: MeowMusic
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_ENTITLEMENTS: MeowMusic.entitlements
     dependencies:
       - package: GoogleSignIn
         product: GoogleSignIn
+      - sdk: CarPlay.framework
     schemes:
       MeowMusic:
         build:

@@ -6,6 +6,7 @@ struct PlayerView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(TabRouter.self) private var tabRouter
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Query(sort: \FavoriteRecord.dateFavorited, order: .reverse) private var favorites: [FavoriteRecord]
 
     @State private var showingLyrics = false
@@ -80,6 +81,9 @@ struct PlayerView: View {
                 placeholderPlayer
             }
         }
+        // On iPad, cap the column so artwork doesn't balloon to fill a wide
+        // detail pane; on iPhone this is a no-op (nil = unconstrained).
+        .frame(maxWidth: horizontalSizeClass == .regular ? 520 : nil)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.background)
         .contentShape(Rectangle())

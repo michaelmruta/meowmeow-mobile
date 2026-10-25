@@ -49,6 +49,10 @@ final class TabRouter {
     }
 }
 
+/// Same bottom `TabView` on iPhone and iPad — no sidebar. iPad adaptation
+/// happens inside individual screens instead (see `PlayerView`'s content
+/// width cap and `ArtistAlbumsView`'s grid on regular width), not in the
+/// navigation chrome.
 struct RootTabView: View {
     @Environment(TabRouter.self) private var router
 
